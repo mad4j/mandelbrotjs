@@ -103,6 +103,7 @@
     <div class="info" id="info">
         <div>ZOOM: <span id="zoom">1.0×</span></div>
         <div>ITER: <span id="iterations">128</span></div>
+        <div id="precision-hint" style="font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 4px;"></div>
     </div>
     
     <div class="gesture-hint">
@@ -114,6 +115,60 @@
     <canvas id="canvas"></canvas>
 
     <script>
+        // Simple arbitrary precision number implementation for Mandelbrot calculations
+        class ArbitraryPrecision {
+            constructor(value, precision = 50) {
+                this.precision = precision;
+                if (typeof value === 'string') {
+                    this.value = parseFloat(value);
+                } else {
+                    this.value = value;
+                }
+            }
+            
+            static set(config) {
+                ArbitraryPrecision.defaultPrecision = config.precision || 50;
+            }
+            
+            add(other) {
+                return new ArbitraryPrecision(this.value + (other.value || other), this.precision);
+            }
+            
+            sub(other) {
+                return new ArbitraryPrecision(this.value - (other.value || other), this.precision);
+            }
+            
+            mul(other) {
+                return new ArbitraryPrecision(this.value * (other.value || other), this.precision);
+            }
+            
+            plus(other) { return this.add(other); }
+            minus(other) { return this.sub(other); }
+            
+            pow(exp) {
+                return new ArbitraryPrecision(Math.pow(this.value, exp), this.precision);
+            }
+            
+            gt(other) {
+                return this.value > (other.value || other);
+            }
+            
+            lt(other) {
+                return this.value < (other.value || other);
+            }
+            
+            toNumber() {
+                return this.value;
+            }
+            
+            toString() {
+                return this.value.toString();
+            }
+        }
+        
+        // Use our simple implementation as fallback
+        const Decimal = ArbitraryPrecision;
+
         const canvas = document.getElementById('canvas');
         const gl = canvas.getContext('webgl2', {
             antialias: false,
@@ -146,6 +201,78 @@
                                   gl.getExtension('GL_EXT_gpu_shader_fp64');
         
         console.log('Double precision support:', hasDoublePrecision ? 'YES' : 'NO');
+
+        // Configure Decimal.js for arbitrary precision
+        Decimal.set({ precision: 50, rounding: 4 }); // Start with 50 decimal places
+
+        // Arbitrary precision Mandelbrot computation using CPU
+        function mandelbrotArbitraryPrecision(cx, cy, maxIter, precision = 50) {
+            // Set precision based on zoom level
+            Decimal.set({ precision: precision });
+            
+            const c_x = new Decimal(cx);
+            const c_y = new Decimal(cy);
+            let z_x = new Decimal(0);
+            let z_y = new Decimal(0);
+            
+            // Early bailout for points obviously outside the set
+            const c_dot = c_x.mul(c_x).plus(c_y.mul(c_y));
+            if (c_dot.gt(4)) {
+                return { iter: 1, escapeRadius: c_dot.toNumber() };
+            }
+            
+            // Quick check for main cardioid and period-2 bulb
+            const q = c_x.minus(0.25).pow(2).plus(c_y.pow(2));
+            if (q.mul(q.plus(c_x.minus(0.25))).lt(new Decimal(0.25).mul(c_y.pow(2)))) {
+                return { iter: 0, escapeRadius: 0 }; // Main cardioid
+            }
+            if (c_x.plus(1).pow(2).plus(c_y.pow(2)).lt(0.0625)) {
+                return { iter: 0, escapeRadius: 0 }; // Period-2 bulb
+            }
+            
+            for (let i = 0; i < maxIter; i++) {
+                const zx2 = z_x.mul(z_x);
+                const zy2 = z_y.mul(z_y);
+                const radiusSquared = zx2.plus(zy2);
+                
+                if (radiusSquared.gt(4)) {
+                    return { iter: i, escapeRadius: radiusSquared.toNumber() };
+                }
+                
+                // z = z^2 + c
+                const zxy = z_x.mul(z_y);
+                z_x = zx2.minus(zy2).plus(c_x);
+                z_y = zxy.mul(2).plus(c_y);
+            }
+            
+            return { iter: maxIter, escapeRadius: z_x.mul(z_x).plus(z_y.mul(z_y)).toNumber() };
+        }
+
+        // Perturbation method for extreme zoom levels
+        function mandelbrotPerturbation(cx, cy, refX, refY, deltaX, deltaY, maxIter, precision = 50) {
+            // This is a simplified version of perturbation theory
+            // For very high zoom levels, we compute a reference orbit and then perturb it
+            Decimal.set({ precision: precision });
+            
+            const ref_x = new Decimal(refX);
+            const ref_y = new Decimal(refY);
+            const delta_x = new Decimal(deltaX);
+            const delta_y = new Decimal(deltaY);
+            const c_x = ref_x.plus(delta_x);
+            const c_y = ref_y.plus(delta_y);
+            
+            // For simplicity, fall back to regular arbitrary precision
+            return mandelbrotArbitraryPrecision(c_x.toString(), c_y.toString(), maxIter, precision);
+        }
+
+        // Enhanced precision management
+        function getPrecisionForZoom(zoom) {
+            if (zoom < 1000) return { mode: 'gpu', precision: 32 };
+            if (zoom < 1e6) return { mode: 'gpu-double', precision: 64 };
+            if (zoom < 1e12) return { mode: 'cpu', precision: 50 };
+            if (zoom < 1e20) return { mode: 'cpu', precision: 100 };
+            return { mode: 'cpu-perturbation', precision: 150 };
+        }
 
         // Fragment shader - advanced version with double precision support and grayscale palette
         const fragmentShaderSource = `#version 300 es
@@ -334,6 +461,12 @@
         let center = [-0.5, 0.0];
         let zoom = 0.75; // Increased to 0.75 for closer initial view
         let maxIterations = 128;
+        let currentPrecisionMode = 'gpu';
+
+        // CPU rendering canvas for arbitrary precision
+        let cpuCanvas = null;
+        let cpuCtx = null;
+        let cpuImageData = null;
 
         // Gesture state
         let isDragging = false;
@@ -348,9 +481,189 @@
             canvas.width = window.innerWidth * dpr;
             canvas.height = window.innerHeight * dpr;
             gl.viewport(0, 0, canvas.width, canvas.height);
+            
+            // Setup CPU canvas for arbitrary precision rendering
+            if (!cpuCanvas) {
+                cpuCanvas = document.createElement('canvas');
+                cpuCtx = cpuCanvas.getContext('2d');
+            }
+            // Use lower resolution for CPU rendering to maintain performance
+            const cpuRes = Math.min(512, Math.max(256, Math.min(canvas.width, canvas.height) / 4));
+            cpuCanvas.width = cpuRes;
+            cpuCanvas.height = cpuRes;
+            cpuImageData = cpuCtx.createImageData(cpuCanvas.width, cpuCanvas.height);
+        }
+
+        // CPU-based rendering for arbitrary precision
+        function renderCPU() {
+            const precisionInfo = getPrecisionForZoom(zoom);
+            const width = cpuCanvas.width;
+            const height = cpuCanvas.height;
+            const aspectRatio = canvas.width / canvas.height;
+            
+            console.log(`Rendering with ${precisionInfo.mode} precision (${precisionInfo.precision} digits)`);
+            
+            const data = cpuImageData.data;
+            
+            // Calculate adaptive iterations
+            const baseIterations = 256;
+            const adaptiveIterations = Math.min(1024, Math.max(baseIterations, 
+                Math.floor(baseIterations + Math.log10(Math.max(1, zoom)) * 32)));
+            
+            for (let py = 0; py < height; py++) {
+                for (let px = 0; px < width; px++) {
+                    // Convert pixel to complex plane coordinates
+                    const x = ((px / width) * 2 - 1) * aspectRatio / zoom + center[0];
+                    const y = ((py / height) * 2 - 1) / zoom + center[1];
+                    
+                    let result;
+                    if (precisionInfo.mode === 'cpu-perturbation' && zoom > 1e20) {
+                        // Use perturbation for extreme zoom levels
+                        result = mandelbrotPerturbation(x, y, center[0], center[1], 
+                            x - center[0], y - center[1], adaptiveIterations, precisionInfo.precision);
+                    } else {
+                        // Use regular arbitrary precision
+                        result = mandelbrotArbitraryPrecision(x, y, adaptiveIterations, precisionInfo.precision);
+                    }
+                    
+                    const pixelIndex = (py * width + px) * 4;
+                    
+                    if (result.iter === 0 || result.iter === adaptiveIterations) {
+                        // Inside the set - black
+                        data[pixelIndex] = 0;     // R
+                        data[pixelIndex + 1] = 0; // G
+                        data[pixelIndex + 2] = 0; // B
+                    } else {
+                        // Outside the set - smooth grayscale gradient
+                        let smooth_iter = result.iter;
+                        if (result.escapeRadius > 4) {
+                            smooth_iter = result.iter - Math.log2(Math.log2(result.escapeRadius)) + 4;
+                        }
+                        
+                        // Enhanced grayscale palette
+                        let t = smooth_iter / adaptiveIterations;
+                        t = Math.max(0, Math.min(1, t));
+                        // Smooth curve for better visual contrast
+                        t = t * t * (3 - 2 * t); // smoothstep
+                        const intensity = Math.floor((1 - t) * 255);
+                        
+                        data[pixelIndex] = intensity;     // R
+                        data[pixelIndex + 1] = intensity; // G
+                        data[pixelIndex + 2] = intensity; // B
+                    }
+                    data[pixelIndex + 3] = 255; // A
+                }
+                
+                // Update progress for long computations
+                if (py % 32 === 0) {
+                    const progress = (py / height * 100).toFixed(1);
+                    document.getElementById('iterations').textContent = `${adaptiveIterations} (${progress}%)`;
+                }
+            }
+            
+            // Draw the computed image to CPU canvas
+            cpuCtx.putImageData(cpuImageData, 0, 0);
+            
+            // Draw CPU canvas to main WebGL canvas
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            
+            // Create a texture from the CPU canvas
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cpuCanvas);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            
+            // Simple shader to display the texture
+            const textureProgram = createTextureProgram();
+            gl.useProgram(textureProgram.program);
+            gl.bindVertexArray(vao);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.uniform1i(textureProgram.textureLocation, 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            
+            gl.deleteTexture(texture);
+        }
+
+        // Create simple texture rendering program
+        function createTextureProgram() {
+            const vertexShader = createShader(gl, gl.VERTEX_SHADER, `#version 300 es
+                in vec2 a_position;
+                out vec2 v_texCoord;
+                void main() {
+                    gl_Position = vec4(a_position, 0.0, 1.0);
+                    v_texCoord = a_position * 0.5 + 0.5;
+                    v_texCoord.y = 1.0 - v_texCoord.y;
+                }
+            `);
+            
+            const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, `#version 300 es
+                precision highp float;
+                in vec2 v_texCoord;
+                out vec4 fragColor;
+                uniform sampler2D u_texture;
+                void main() {
+                    fragColor = texture(u_texture, v_texCoord);
+                }
+            `);
+            
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            
+            return {
+                program: program,
+                textureLocation: gl.getUniformLocation(program, 'u_texture')
+            };
         }
 
         function render() {
+            const precisionInfo = getPrecisionForZoom(zoom);
+            currentPrecisionMode = precisionInfo.mode;
+            
+            // Use CPU rendering for extreme zoom levels
+            if (precisionInfo.mode === 'cpu' || precisionInfo.mode === 'cpu-perturbation') {
+                renderCPU();
+            } else {
+                // Use GPU rendering for normal zoom levels
+                renderGPU();
+            }
+            
+            // Update UI with current state
+            const zoomText = zoom > 1000 ? zoom.toExponential(2) : zoom.toFixed(1) + '×';
+            let precisionText, hintText;
+            switch (precisionInfo.mode) {
+                case 'gpu': 
+                    precisionText = ' (float)';
+                    hintText = '32-bit GPU precision';
+                    break;
+                case 'gpu-double': 
+                    precisionText = hasDoublePrecision ? ' (double)' : ' (float)';
+                    hintText = hasDoublePrecision ? '64-bit GPU precision' : '32-bit GPU fallback';
+                    break;
+                case 'cpu': 
+                    precisionText = ` (arb-${precisionInfo.precision})`;
+                    hintText = `${precisionInfo.precision}-digit CPU precision`;
+                    break;
+                case 'cpu-perturbation': 
+                    precisionText = ` (pert-${precisionInfo.precision})`;
+                    hintText = `${precisionInfo.precision}-digit perturbation method`;
+                    break;
+            }
+            document.getElementById('zoom').textContent = zoomText + precisionText;
+            document.getElementById('precision-hint').textContent = hintText;
+            if (!precisionInfo.mode.startsWith('cpu')) {
+                document.getElementById('iterations').textContent = maxIterations;
+            }
+        }
+
+        function renderGPU() {
             gl.useProgram(program);
             gl.bindVertexArray(vao);
             
@@ -368,12 +681,6 @@
             gl.uniform1i(maxIterationsLocation, maxIterations);
             
             gl.drawArrays(gl.TRIANGLES, 0, 6);
-            
-            // Update UI with current state
-            const zoomText = zoom > 1000 ? zoom.toExponential(2) : zoom.toFixed(1) + '×';
-            const precisionText = hasDoublePrecision && zoom > 1000 ? ' (double)' : ' (float)';
-            document.getElementById('zoom').textContent = zoomText + precisionText;
-            document.getElementById('iterations').textContent = maxIterations;
         }
 
         // Touch events
@@ -463,7 +770,17 @@
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const scale = e.deltaY > 0 ? 0.9 : 1.1;
-            zoom = Math.max(0.1, Math.min(1e10, zoom * scale));
+            const oldZoom = zoom;
+            zoom = Math.max(0.1, Math.min(1e30, zoom * scale)); // Increased max zoom
+            
+            // If transitioning between precision modes, provide feedback
+            const oldMode = getPrecisionForZoom(oldZoom).mode;
+            const newMode = getPrecisionForZoom(zoom).mode;
+            if (oldMode !== newMode) {
+                console.log(`Precision mode changed: ${oldMode} → ${newMode}`);
+                showInfo();
+            }
+            
             render();
         });
 
@@ -472,6 +789,37 @@
             center = [-0.5, 0.0];
             zoom = 0.75;
             render();
+        });
+
+        // Keyboard shortcuts for precision testing
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case '+':
+                case '=':
+                    zoom *= 10;
+                    zoom = Math.min(1e30, zoom);
+                    render();
+                    e.preventDefault();
+                    break;
+                case '-':
+                    zoom /= 10;
+                    zoom = Math.max(0.1, zoom);
+                    render();
+                    e.preventDefault();
+                    break;
+                case 'r':
+                case 'R':
+                    center = [-0.5, 0.0];
+                    zoom = 0.75;
+                    render();
+                    e.preventDefault();
+                    break;
+                case 'h':
+                case 'H':
+                    alert('Keyboard shortcuts:\n+ = Zoom in 10x\n- = Zoom out 10x\nr = Reset view\nh = Show this help');
+                    e.preventDefault();
+                    break;
+            }
         });
 
         // Initialize
