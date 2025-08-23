@@ -272,7 +272,17 @@
         // Enhanced precision management with interpolation
         function getPrecisionForZoom(zoom) {
             if (zoom < 1000) return { mode: 'gpu', precision: 32 };
-            if (zoom < 1e6) return { mode: 'gpu-double', precision: 64 };
+            
+            // If double precision is not available, fallback to CPU arbitrary precision
+            if (zoom < 1e6) {
+                if (hasDoublePrecision) {
+                    return { mode: 'gpu-double', precision: 64 };
+                } else {
+                    // Fallback to CPU arbitrary precision when GPU double precision is not available
+                    return { mode: 'cpu', precision: Math.min(75, 50 + Math.floor(Math.log10(zoom / 1000) * 3)) };
+                }
+            }
+            
             if (zoom < 1e12) return { mode: 'cpu', precision: Math.min(75, 50 + Math.floor(Math.log10(zoom / 1e6) * 5)) };
             if (zoom < 1e20) return { mode: 'cpu', precision: Math.min(125, 100 + Math.floor(Math.log10(zoom / 1e12) * 5)) };
             return { mode: 'cpu-perturbation', precision: Math.min(200, 150 + Math.floor(Math.log10(zoom / 1e20) * 10)) };
@@ -663,8 +673,8 @@
                     hintText = '32-bit GPU precision';
                     break;
                 case 'gpu-double': 
-                    precisionText = hasDoublePrecision ? ' (double)' : ' (float)';
-                    hintText = hasDoublePrecision ? '64-bit GPU precision' : '32-bit GPU fallback';
+                    precisionText = ' (double)';
+                    hintText = '64-bit GPU precision';
                     break;
                 case 'cpu': 
                     precisionText = ` (arb-${precisionInfo.precision})`;
