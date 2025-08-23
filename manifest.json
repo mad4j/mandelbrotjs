@@ -1,0 +1,12 @@
+{
+  "name": "Mandelbrot Explorer",
+  "short_name": "Mandelbrot",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "start_url": ".",
+  "scope": ".",
+  "description": "Esplora l'insieme di Mandelbrot in fullscreen.",
+  "icons": []
+}
