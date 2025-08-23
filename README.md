@@ -1,0 +1,2 @@
+# mandelbrotjs
+Implementazione Javascript
