@@ -141,44 +141,146 @@
             }
         `;
 
-        // Fragment shader - grayscale palette
+        // Check for double precision support
+        const hasDoublePrecision = gl.getExtension('GL_ARB_gpu_shader_fp64') || 
+                                  gl.getExtension('GL_EXT_gpu_shader_fp64');
+        
+        console.log('Double precision support:', hasDoublePrecision ? 'YES' : 'NO');
+
+        // Fragment shader - advanced version with double precision support and grayscale palette
         const fragmentShaderSource = `#version 300 es
+            ${hasDoublePrecision ? '#extension GL_ARB_gpu_shader_fp64 : enable' : ''}
             precision highp float;
+            ${hasDoublePrecision ? 'precision highp double;' : ''}
+            
             in vec2 v_coord;
             out vec4 fragColor;
             uniform int u_maxIterations;
+            uniform float u_zoom;
             
             vec3 palette(float t) {
-                // Linear grayscale inverted: 0 = white, 1 = black
+                // Enhanced grayscale palette with smooth gradients
                 t = clamp(t, 0.0, 1.0);
+                // Smooth curve for better visual contrast
+                t = smoothstep(0.0, 1.0, t);
                 return vec3(1.0 - t);
             }
             
-            void main() {
-                vec2 c = v_coord;
-                vec2 z = vec2(0.0);
-                int iter = 0;
+            ${hasDoublePrecision ? `
+            // Double precision version for high zoom levels
+            void mandelbrotDouble(dvec2 c, out int iter, out double escapeRadius) {
+                dvec2 z = dvec2(0.0);
+                iter = 0;
+                escapeRadius = 0.0;
+                
+                // Early bailout for points obviously outside the set
+                double c_dot = dot(c, c);
+                if(c_dot > 4.0) {
+                    iter = 1;
+                    escapeRadius = c_dot;
+                    return;
+                }
                 
                 for(int i = 0; i < 1024; i++) {
                     if(i >= u_maxIterations) break;
                     
-                    float x = z.x * z.x - z.y * z.y + c.x;
-                    float y = 2.0 * z.x * z.y + c.y;
-                    z = vec2(x, y);
+                    double zx2 = z.x * z.x;
+                    double zy2 = z.y * z.y;
                     
-                    if(dot(z, z) > 4.0) {
+                    // Optimized: check escape condition before expensive calculations
+                    double radiusSquared = zx2 + zy2;
+                    if(radiusSquared > 4.0) {
                         iter = i;
+                        escapeRadius = radiusSquared;
                         break;
                     }
+                    
+                    // z = z^2 + c (optimized to avoid duplicate calculations)
+                    double zxy = z.x * z.y;
+                    z.x = zx2 - zy2 + c.x;
+                    z.y = 2.0 * zxy + c.y;
                 }
+                
+                if(iter == u_maxIterations) {
+                    escapeRadius = dot(z, z);
+                }
+            }
+            ` : ''}
+            
+            // Single precision fallback version
+            void mandelbrotFloat(vec2 c, out int iter, out float escapeRadius) {
+                vec2 z = vec2(0.0);
+                iter = 0;
+                escapeRadius = 0.0;
+                
+                // Early bailout for points obviously outside the set
+                float c_dot = dot(c, c);
+                if(c_dot > 4.0) {
+                    iter = 1;
+                    escapeRadius = c_dot;
+                    return;
+                }
+                
+                // Quick check for main cardioid and period-2 bulb
+                float q = pow(c.x - 0.25, 2.0) + c.y * c.y;
+                if(q * (q + (c.x - 0.25)) < 0.25 * c.y * c.y) return; // Main cardioid
+                if((c.x + 1.0) * (c.x + 1.0) + c.y * c.y < 0.0625) return; // Period-2 bulb
+                
+                for(int i = 0; i < 1024; i++) {
+                    if(i >= u_maxIterations) break;
+                    
+                    float zx2 = z.x * z.x;
+                    float zy2 = z.y * z.y;
+                    
+                    // Optimized: check escape condition before expensive calculations
+                    float radiusSquared = zx2 + zy2;
+                    if(radiusSquared > 4.0) {
+                        iter = i;
+                        escapeRadius = radiusSquared;
+                        break;
+                    }
+                    
+                    // z = z^2 + c (optimized to avoid duplicate calculations)
+                    float zxy = z.x * z.y;
+                    z.x = zx2 - zy2 + c.x;
+                    z.y = 2.0 * zxy + c.y;
+                }
+                
+                if(iter == u_maxIterations) {
+                    escapeRadius = dot(z, z);
+                }
+            }
+            
+            void main() {
+                int iter;
+                float escapeRadius;
+                
+                ${hasDoublePrecision ? `
+                // Use double precision for high zoom levels (> 1000x)
+                if(u_zoom > 1000.0) {
+                    dvec2 c = dvec2(v_coord);
+                    double escapeRadiusDouble;
+                    mandelbrotDouble(c, iter, escapeRadiusDouble);
+                    escapeRadius = float(escapeRadiusDouble);
+                } else {
+                    mandelbrotFloat(v_coord, iter, escapeRadius);
+                }
+                ` : `
+                // Fallback to single precision
+                mandelbrotFloat(v_coord, iter, escapeRadius);
+                `}
                 
                 if(iter == 0 || iter == u_maxIterations) {
                     // Inside the set - black
                     fragColor = vec4(0.0, 0.0, 0.0, 1.0);
                 } else {
-                    // Outside the set - gradient to white
-                    float smooth_iter = float(iter) - log2(log2(dot(z, z))) + 4.0;
-                    vec3 color = palette(float(iter) / float(u_maxIterations));
+                    // Outside the set - smooth grayscale gradient
+                    float smooth_iter = float(iter);
+                    if(escapeRadius > 4.0) {
+                        smooth_iter = float(iter) - log2(log2(escapeRadius)) + 4.0;
+                    }
+                    
+                    vec3 color = palette(smooth_iter / float(u_maxIterations));
                     fragColor = vec4(color, 1.0);
                 }
             }
@@ -252,15 +354,25 @@
             gl.useProgram(program);
             gl.bindVertexArray(vao);
             
+            // Pass uniforms to both vertex and fragment shaders
             gl.uniform2f(centerLocation, center[0], center[1]);
             gl.uniform1f(zoomLocation, zoom);
             gl.uniform1f(aspectRatioLocation, canvas.width / canvas.height);
+            
+            // Optimized iteration count based on zoom level and double precision support
+            const baseIterations = hasDoublePrecision && zoom > 1000 ? 256 : 128;
+            const adaptiveIterations = Math.min(1024, Math.max(baseIterations, 
+                Math.floor(baseIterations + Math.log10(Math.max(1, zoom)) * 32)));
+            maxIterations = adaptiveIterations;
+            
             gl.uniform1i(maxIterationsLocation, maxIterations);
             
             gl.drawArrays(gl.TRIANGLES, 0, 6);
             
-            document.getElementById('zoom').textContent = 
-                zoom > 1000 ? zoom.toExponential(1) : zoom.toFixed(1) + '×';
+            // Update UI with current state
+            const zoomText = zoom > 1000 ? zoom.toExponential(2) : zoom.toFixed(1) + '×';
+            const precisionText = hasDoublePrecision && zoom > 1000 ? ' (double)' : ' (float)';
+            document.getElementById('zoom').textContent = zoomText + precisionText;
             document.getElementById('iterations').textContent = maxIterations;
         }
 
@@ -281,7 +393,6 @@
                     center[0] += x * (canvas.width / canvas.height) / zoom;
                     center[1] += y / zoom;
                     zoom *= 2;
-                    maxIterations = Math.min(1024, Math.floor(maxIterations * 1.2));
                     render();
                 }
                 lastTap = now;
@@ -311,7 +422,6 @@
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 const scale = distance / initialDistance;
                 zoom = Math.max(0.1, Math.min(1e10, initialZoom * scale));
-                maxIterations = Math.min(1024, Math.floor(128 + Math.log10(zoom) * 50));
                 render();
             }
         });
@@ -354,7 +464,6 @@
             e.preventDefault();
             const scale = e.deltaY > 0 ? 0.9 : 1.1;
             zoom = Math.max(0.1, Math.min(1e10, zoom * scale));
-            maxIterations = Math.min(1024, Math.floor(128 + Math.log10(zoom) * 50));
             render();
         });
 
@@ -362,7 +471,6 @@
         document.getElementById('resetBtn').addEventListener('click', () => {
             center = [-0.5, 0.0];
             zoom = 0.75;
-            maxIterations = 128;
             render();
         });
 
