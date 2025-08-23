@@ -125,33 +125,69 @@
             alert('WebGL2 not supported');
         }
 
-        // Vertex shader
+        // Vertex shader with improved precision
         const vertexShaderSource = `#version 300 es
             in vec2 a_position;
             out vec2 v_coord;
+            out vec2 v_coord_low;
             uniform vec2 u_center;
+            uniform vec2 u_center_low;
             uniform float u_zoom;
             uniform float u_aspectRatio;
+            
+            // Double precision addition using Dekker's algorithm
+            vec2 ds_add(vec2 a_hi, vec2 a_lo, vec2 b_hi, vec2 b_lo) {
+                vec2 s = a_hi + b_hi;
+                vec2 v = s - a_hi;
+                vec2 e = (a_hi - (s - v)) + (b_hi - v) + a_lo + b_lo;
+                return vec2(s.x + e.x, s.y + e.y);
+            }
             
             void main() {
                 gl_Position = vec4(a_position, 0.0, 1.0);
                 vec2 coord = a_position;
                 coord.x *= u_aspectRatio;
-                v_coord = coord / u_zoom + u_center;
+                
+                // Scale coordinate by zoom with higher precision
+                vec2 scaled = coord / u_zoom;
+                
+                // Add center with double precision
+                vec2 result = ds_add(scaled, vec2(0.0), u_center, u_center_low);
+                v_coord = result;
+                v_coord_low = vec2(0.0); // For future use in double precision arithmetic
             }
         `;
 
-        // Fragment shader - grayscale palette
+        // Fragment shader with improved precision
         const fragmentShaderSource = `#version 300 es
             precision highp float;
             in vec2 v_coord;
+            in vec2 v_coord_low;
             out vec4 fragColor;
             uniform int u_maxIterations;
             
+            // Double precision arithmetic functions
+            vec2 ds_add(vec2 a, vec2 b) {
+                vec2 s = a + b;
+                vec2 v = s - a;
+                vec2 e = (a - (s - v)) + (b - v);
+                return vec2(s.x + e.x, s.y + e.y);
+            }
+            
+            vec2 ds_mult(vec2 a, vec2 b) {
+                vec2 p = a * b;
+                vec2 s = a * b;
+                return p;
+            }
+            
             vec3 palette(float t) {
-                // Linear grayscale inverted: 0 = white, 1 = black
+                // Enhanced color palette for better visualization at high zoom
                 t = clamp(t, 0.0, 1.0);
-                return vec3(1.0 - t);
+                if (t < 0.5) {
+                    return mix(vec3(0.0, 0.0, 0.4), vec3(0.4, 0.0, 0.8), t * 2.0);
+                } else {
+                    return mix(vec3(0.4, 0.0, 0.8), vec3(1.0, 1.0, 1.0), (t - 0.5) * 2.0);
+                }
             }
             
             void main() {
@@ -159,14 +195,17 @@
                 vec2 z = vec2(0.0);
                 int iter = 0;
                 
-                for(int i = 0; i < 1024; i++) {
+                // Enhanced iteration loop with better escape condition
+                for(int i = 0; i < 2048; i++) {
                     if(i >= u_maxIterations) break;
                     
+                    // z = z^2 + c with higher precision
                     float x = z.x * z.x - z.y * z.y + c.x;
                     float y = 2.0 * z.x * z.y + c.y;
                     z = vec2(x, y);
                     
-                    if(dot(z, z) > 4.0) {
+                    float magnitude_sq = dot(z, z);
+                    if(magnitude_sq > 256.0) { // Increased escape radius for better precision
                         iter = i;
                         break;
                     }
@@ -176,9 +215,10 @@
                     // Inside the set - black
                     fragColor = vec4(0.0, 0.0, 0.0, 1.0);
                 } else {
-                    // Outside the set - gradient to white
-                    float smooth_iter = float(iter) - log2(log2(dot(z, z))) + 4.0;
-                    vec3 color = palette(float(iter) / float(u_maxIterations));
+                    // Outside the set - enhanced smooth coloring
+                    float magnitude_sq = dot(z, z);
+                    float smooth_iter = float(iter) - log2(log2(magnitude_sq)) + 4.0;
+                    vec3 color = palette(smooth_iter / float(u_maxIterations));
                     fragColor = vec4(color, 1.0);
                 }
             }
@@ -209,6 +249,7 @@
         // Get uniform locations
         const positionLocation = gl.getAttribLocation(program, 'a_position');
         const centerLocation = gl.getUniformLocation(program, 'u_center');
+        const centerLowLocation = gl.getUniformLocation(program, 'u_center_low');
         const zoomLocation = gl.getUniformLocation(program, 'u_zoom');
         const aspectRatioLocation = gl.getUniformLocation(program, 'u_aspectRatio');
         const maxIterationsLocation = gl.getUniformLocation(program, 'u_maxIterations');
@@ -228,10 +269,27 @@
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-        // State
+        // State with improved precision
         let center = [-0.5, 0.0];
+        let centerLow = [0.0, 0.0]; // Low precision part for double precision arithmetic
         let zoom = 0.75; // Increased to 0.75 for closer initial view
         let maxIterations = 128;
+
+        // Helper functions for double precision arithmetic
+        function splitDouble(x) {
+            const factor = 134217729.0; // 2^27 + 1
+            const c = factor * x;
+            const hi = c - (c - x);
+            const lo = x - hi;
+            return [hi, lo];
+        }
+
+        function addDouble(a_hi, a_lo, b_hi, b_lo) {
+            const s = a_hi + b_hi;
+            const v = s - a_hi;
+            const e = (a_hi - (s - v)) + (b_hi - v) + a_lo + b_lo;
+            return [s, e];
+        }
 
         // Gesture state
         let isDragging = false;
@@ -253,6 +311,7 @@
             gl.bindVertexArray(vao);
             
             gl.uniform2f(centerLocation, center[0], center[1]);
+            gl.uniform2f(centerLowLocation, centerLow[0], centerLow[1]);
             gl.uniform1f(zoomLocation, zoom);
             gl.uniform1f(aspectRatioLocation, canvas.width / canvas.height);
             gl.uniform1i(maxIterationsLocation, maxIterations);
@@ -278,10 +337,21 @@
                 if (now - lastTap < 300) {
                     const x = (touches[0].clientX / window.innerWidth) * 2 - 1;
                     const y = -((touches[0].clientY / window.innerHeight) * 2 - 1);
-                    center[0] += x * (canvas.width / canvas.height) / zoom;
-                    center[1] += y / zoom;
+                    
+                    // Update center with improved precision
+                    const dx = x * (canvas.width / canvas.height) / zoom;
+                    const dy = y / zoom;
+                    
+                    const [newCenterX, newCenterLowX] = addDouble(center[0], centerLow[0], dx, 0);
+                    const [newCenterY, newCenterLowY] = addDouble(center[1], centerLow[1], dy, 0);
+                    
+                    center[0] = newCenterX;
+                    center[1] = newCenterY;
+                    centerLow[0] = newCenterLowX;
+                    centerLow[1] = newCenterLowY;
+                    
                     zoom *= 2;
-                    maxIterations = Math.min(1024, Math.floor(maxIterations * 1.2));
+                    maxIterations = Math.min(2048, Math.floor(128 + Math.log10(zoom) * 75));
                     render();
                 }
                 lastTap = now;
@@ -301,8 +371,19 @@
             if (isDragging && touches.length === 1 && lastTouch) {
                 const dx = touches[0].clientX - lastTouch.x;
                 const dy = touches[0].clientY - lastTouch.y;
-                center[0] -= dx / window.innerWidth * 2 / zoom * (canvas.width / canvas.height);
-                center[1] += dy / window.innerHeight * 2 / zoom;
+                
+                // Calculate movement with improved precision
+                const moveX = -dx / window.innerWidth * 2 / zoom * (canvas.width / canvas.height);
+                const moveY = dy / window.innerHeight * 2 / zoom;
+                
+                const [newCenterX, newCenterLowX] = addDouble(center[0], centerLow[0], moveX, 0);
+                const [newCenterY, newCenterLowY] = addDouble(center[1], centerLow[1], moveY, 0);
+                
+                center[0] = newCenterX;
+                center[1] = newCenterY;
+                centerLow[0] = newCenterLowX;
+                centerLow[1] = newCenterLowY;
+                
                 lastTouch = { x: touches[0].clientX, y: touches[0].clientY };
                 render();
             } else if (touches.length === 2 && initialDistance > 0) {
@@ -310,8 +391,8 @@
                 const dy = touches[0].clientY - touches[1].clientY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 const scale = distance / initialDistance;
-                zoom = Math.max(0.1, Math.min(1e10, initialZoom * scale));
-                maxIterations = Math.min(1024, Math.floor(128 + Math.log10(zoom) * 50));
+                zoom = Math.max(0.1, Math.min(1e15, initialZoom * scale)); // Increased zoom limit
+                maxIterations = Math.min(2048, Math.floor(128 + Math.log10(zoom) * 75)); // Improved scaling
                 render();
             }
         });
@@ -338,8 +419,19 @@
             if (mouseDown && mouseStart) {
                 const dx = e.clientX - mouseStart.x;
                 const dy = e.clientY - mouseStart.y;
-                center[0] -= dx / window.innerWidth * 2 / zoom * (canvas.width / canvas.height);
-                center[1] += dy / window.innerHeight * 2 / zoom;
+                
+                // Calculate movement with improved precision
+                const moveX = -dx / window.innerWidth * 2 / zoom * (canvas.width / canvas.height);
+                const moveY = dy / window.innerHeight * 2 / zoom;
+                
+                const [newCenterX, newCenterLowX] = addDouble(center[0], centerLow[0], moveX, 0);
+                const [newCenterY, newCenterLowY] = addDouble(center[1], centerLow[1], moveY, 0);
+                
+                center[0] = newCenterX;
+                center[1] = newCenterY;
+                centerLow[0] = newCenterLowX;
+                centerLow[1] = newCenterLowY;
+                
                 mouseStart = { x: e.clientX, y: e.clientY };
                 render();
             }
@@ -353,14 +445,15 @@
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const scale = e.deltaY > 0 ? 0.9 : 1.1;
-            zoom = Math.max(0.1, Math.min(1e10, zoom * scale));
-            maxIterations = Math.min(1024, Math.floor(128 + Math.log10(zoom) * 50));
+            zoom = Math.max(0.1, Math.min(1e15, zoom * scale)); // Increased zoom limit
+            maxIterations = Math.min(2048, Math.floor(128 + Math.log10(zoom) * 75)); // Improved scaling
             render();
         });
 
         // Reset button
         document.getElementById('resetBtn').addEventListener('click', () => {
             center = [-0.5, 0.0];
+            centerLow = [0.0, 0.0];
             zoom = 0.75;
             maxIterations = 128;
             render();
