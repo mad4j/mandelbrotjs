@@ -217,7 +217,12 @@
 		destX = -1.34228;
 		destY = 0.0;
 		destZoom = 300;
-		destIters = 200;
+		// Use autotuned iterations based on zoom level
+		if (typeof calculateAdaptiveIterations === 'function') {
+			destIters = calculateAdaptiveIterations(300);
+		} else {
+			destIters = 200;
+		}
 		travelling = 2;
 		startRender(1, 1);
 	}
