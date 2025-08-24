@@ -136,7 +136,7 @@
         function createGrayscalePalette() {
             const colors = new Uint32Array(256);
             for (let i = 0; i < 255; i++) {
-                // Create bright grayscale values for better visibility
+                // Create bright grayscale values for better visibility  
                 const gray = Math.floor(i * 255 / 254); // Use full range 0-255
                 // Pack as RGBA32: R=bits 31-24, G=bits 23-16, B=bits 15-8, A=bits 7-0
                 colors[i] = (gray << 24) | (gray << 16) | (gray << 8) | 255;
@@ -157,10 +157,11 @@
         function calculateInitialZoom() {
             const aspectRatio = canvas.width / canvas.height;
             // Mandelbrot set bounds: x ∈ [-2.5, 1.0], y ∈ [-1.25, 1.25]
-            // With center at [-0.5, 0.0], we need:
-            // - x range: [-2.5, 1.0] requires ±2.0 around -0.5
-            // - y range: [-1.25, 1.25] requires ±1.25 around 0
-            return Math.min(aspectRatio / 4.0, 1.25 / 2.5);
+            // Total width = 3.5, total height = 2.5
+            // Choose zoom so that the set fits nicely with some padding
+            const xZoom = canvas.width / 4.0;  // Show roughly 4 units horizontally 
+            const yZoom = canvas.height / 3.0; // Show roughly 3 units vertically
+            return Math.min(xZoom, yZoom) * 0.8; // Add 20% padding
         }
         
         // Initialize Web Workers
@@ -262,12 +263,12 @@
             mandelData = new Uint8Array(canvas.width * canvas.height);
             smoothMandelData = new Uint8Array(canvas.width * canvas.height);
             
-            // Calculate zoom factor and screen position for coordinate transformation
-            // The Web Worker expects zoom as the scale factor (pixels per unit in complex plane)
-            const scale = zoom * Math.min(canvas.width, canvas.height) / 4;
+            // Calculate coordinate transformation for Web Worker
+            // zoom represents the scale: how many pixels per unit in the complex plane
+            const scale = zoom * Math.min(canvas.width, canvas.height);
             // Calculate screen position so that center of canvas maps to our center coordinate
             const screenX = canvas.width / 2 - center[0] * scale;
-            const screenY = canvas.height / 2 - center[1] * scale;
+            const screenY = canvas.height / 2 + center[1] * scale; // Note: Y is flipped
             
             // Start computation
             computeWorker.postMessage({
