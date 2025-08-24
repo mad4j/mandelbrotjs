@@ -211,7 +211,7 @@ drawZoomButtons(0,"in");else if(pointerInZoomOut)
 drawZoomButtons(0,"out");else
 drawZoomButtons(0);}
 if(workersRunning==0){if((!eventOccurred)&&(finished[0])&&(finished[1])&&(finished[2])&&(finished[3])){needRedraw=0;mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);if(!rotating){workingText.style.visibility="hidden";mc.style.borderColor="black";mc.style.outline="5px solid #FFFFFF";if(posterTime!=0){diff=Math.floor((performance.now()-posterTime)/10)/100;posterTime=0;logText.innerHTML="Poster rendered in "+diff+" s";}
-else{diff=Math.floor((performance.now()-start)/10)/100;logText.innerHTML="Rendered in "+diff+" s";}
+else{diff=Math.floor((performance.now()-start)/10)/100;logText.innerHTML="Rendered in "+diff+" s";if(typeof showInfoAfterRender==='function'){showInfoAfterRender(diff*1000);}}
 updateCoords(canvasWidth/2,canvasHeight/2,"centre");if(pointerInZoomIn)
 drawZoomButtons(0,"in");else if(pointerInZoomOut)
 drawZoomButtons(0,"out");else if(posterTime==0)
@@ -242,7 +242,7 @@ else{travelling=0;movingToSaved=0;start=performance.now();zoom=Math.floor(zoom);
 else if((blockSize[workerID]>=2)&&(!eventOccurred)&&(!mousePressed)){if(performance.now()>zoomTime+200){needToRun[workerID]=1;blockSize[workerID]/=2;}}else
 needToRun[workerID]=0;};function wheelMoved(event)
 {event.preventDefault();if(posterTime!=0)
-return 1;zoomTime=performance.now();eventTime=performance.now();var rect=mc.getBoundingClientRect();var mx=(event.clientX-rect.left)/(rect.width)*rect.width*scaleFactor-4;var my=(event.clientY-rect.top)/(rect.height)*rect.height*scaleFactor-4;if((mx<=0)||(mx>canvasWidth)||(my<=0)||(my>canvasHeight))
+return 1;if(typeof hideInfo==='function'){hideInfo();}zoomTime=performance.now();eventTime=performance.now();var rect=mc.getBoundingClientRect();var mx=(event.clientX-rect.left)/(rect.width)*rect.width*scaleFactor-4;var my=(event.clientY-rect.top)/(rect.height)*rect.height*scaleFactor-4;if((mx<=0)||(mx>canvasWidth)||(my<=0)||(my>canvasHeight))
 return 1;var xnorm=(mx*1.0-screenX)/zoom;var ynorm=(my*1.0-screenY)/zoom;if(((zoom==maxZoom)&&(event.deltaY<0))||((zoom==minZoom)&&(event.deltaY>0)))
 return 1;if(event.deltaY<0)
 zoom+=zoom/5;else
@@ -261,7 +261,7 @@ if((mx<=0)||(mx>canvasWidth)||(my<=0)||(my>canvasHeight)){centerX=canvasWidth/2;
 if(lastPointer=="canvas"){updateCoords(centerX,centerY,"centre");lastPointer="offcanvas";}
 return 1;}
 if(mousePressed<1){lastPointer="canvas";updateCoords(mx,my,"pointer");return 1;}
-eventTime=performance.now();if(oldMouseX!=-1){var xOffset=(event.clientX-oldMouseX)*scaleFactor;var yOffset=(event.clientY-oldMouseY)*scaleFactor;screenX+=xOffset;screenY+=yOffset;var xnorm=(canvasWidth/2-screenX)/zoom;var ynorm=(canvasHeight/2-screenY)/zoom;if(xnorm<xnormMin)
+eventTime=performance.now();if(oldMouseX!=-1){if(typeof hideInfo==='function'){hideInfo();}var xOffset=(event.clientX-oldMouseX)*scaleFactor;var yOffset=(event.clientY-oldMouseY)*scaleFactor;screenX+=xOffset;screenY+=yOffset;var xnorm=(canvasWidth/2-screenX)/zoom;var ynorm=(canvasHeight/2-screenY)/zoom;if(xnorm<xnormMin)
 screenX=Math.round(-xnormMin*zoom+canvasWidth/2);if(xnorm>xnormMax)
 screenX=Math.round(-xnormMax*zoom+canvasWidth/2);if(ynorm<ynormMin)
 screenY=Math.round(-ynormMin*zoom+canvasHeight/2);if(ynorm>ynormMax)
@@ -272,7 +272,7 @@ function touchStart(event)
 return 1;mousePressed=0;var rect=mc.getBoundingClientRect();var m1x=(event.targetTouches[0].clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-4;var m1y=(event.targetTouches[0].clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-4;}
 function touchMove(event)
 {if(posterTime!=0)
-return 1;if(event.targetTouches.length>=2){event.preventDefault();var rect=mc.getBoundingClientRect();var m1x=(event.targetTouches[0].clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-4;var m1y=(event.targetTouches[0].clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-4;var m2x=(event.targetTouches[1].clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-4;var m2y=(event.targetTouches[1].clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-4;if((m1x<=0)||(m1x>canvasWidth)||(m1y<=0)||(m1y>canvasHeight)||(m2x<=0)||(m2x>canvasWidth)||(m2y<=0)||(m2y>canvasHeight))
+return 1;if(event.targetTouches.length>=2){event.preventDefault();if(typeof hideInfo==='function'){hideInfo();}var rect=mc.getBoundingClientRect();var m1x=(event.targetTouches[0].clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-4;var m1y=(event.targetTouches[0].clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-4;var m2x=(event.targetTouches[1].clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-4;var m2y=(event.targetTouches[1].clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-4;if((m1x<=0)||(m1x>canvasWidth)||(m1y<=0)||(m1y>canvasHeight)||(m2x<=0)||(m2x>canvasWidth)||(m2y<=0)||(m2y>canvasHeight))
 return 1;var canvasCenterX=canvasWidth/2;var canvasCenterY=canvasHeight/2;centerX=Math.min(m1x,m2x)+Math.abs(m1x-m2x)/2;centerY=Math.min(m1y,m2y)+Math.abs(m1y-m2y)/2;distanceBetween=Math.sqrt(Math.pow(m1x-m2x,2)+Math.pow(m1y-m2y,2));if(firstPinchDistance!=0){pinchRatio=distanceBetween/firstPinchDistance;var xnorm=(centerX*1.0-screenX)/zoom;var ynorm=(centerY*1.0-screenY)/zoom;if(((zoom==maxZoom)&&(pinchRatio>1))||((zoom==minZoom)&&(pinchRatio<1)))
 return 1;if(pinchRatio>1.0)
 zoom+=Math.floor((pinchRatio*zoom)/50);else
@@ -280,7 +280,7 @@ zoom-=Math.floor((pinchRatio*zoom)/50);if(zoom>maxZoom)
 zoom=maxZoom;if(zoom<minZoom)
 zoom=minZoom;screenX=Math.floor(-xnorm*zoom+centerX);screenY=Math.floor(-ynorm*zoom+centerY);if(autotuneIterations){iterations=calculateAdaptiveIterations(zoom);iterSlider.value=iterations;itersInput.value=iterations;}eventOccurred=1;startRender(1,1);}else
 firstPinchDistance=distanceBetween;}else{var rect=mc.getBoundingClientRect();var mx=(event.targetTouches[0].clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-4;var my=(event.targetTouches[0].clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-4;if((mx<=0)||(mx>canvasWidth)||(my<=0)||(my>canvasHeight))
-return 1;event.preventDefault();if(oldMouseX!=-1){var xOffset=(event.targetTouches[0].clientX-oldMouseX)*scaleFactor;var yOffset=(event.targetTouches[0].clientY-oldMouseY)*scaleFactor;screenX+=xOffset;screenY+=yOffset;}
+return 1;event.preventDefault();if(oldMouseX!=-1){if(typeof hideInfo==='function'){hideInfo();}var xOffset=(event.targetTouches[0].clientX-oldMouseX)*scaleFactor;var yOffset=(event.targetTouches[0].clientY-oldMouseY)*scaleFactor;screenX+=xOffset;screenY+=yOffset;}
 oldMouseX=event.targetTouches[0].clientX;oldMouseY=event.targetTouches[0].clientY;eventOccurred=1;killWorkers();startRender(1,1);}}
 function touchEnd(event)
 {firstPinchDistance=0;mousePressed=0;oldMouseX=-1;oldMouseY=-1;}
