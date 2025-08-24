@@ -23,12 +23,13 @@
 				position: fixed;
 				width: 100%;
 				height: 100%;
+				display: flex;
+				align-items: center;
+				justify-content: center;
 			}
 
 			canvas {
 				display: block;
-				width: 100%;
-				height: 100%;
 			}
 
 			.info {
@@ -190,14 +191,17 @@
 	function resizeCanvas() {
 		const canvas = document.getElementById('mandelCanvas');
 		
-		// Set display size (css pixels)
-		canvas.style.width = window.innerWidth + 'px';
-		canvas.style.height = window.innerHeight + 'px';
+		// Make canvas square using the minimum dimension
+		const size = Math.min(window.innerWidth, window.innerHeight);
 		
-		// Set internal size to match the expected mandel-workers.js size for now
-		// We'll scale during rendering
-		canvas.width = 800;  // canvasWidth/scaleFactor from mandel-workers.js
-		canvas.height = 600; // canvasHeight/scaleFactor from mandel-workers.js
+		// Set display size (css pixels)
+		canvas.style.width = size + 'px';
+		canvas.style.height = size + 'px';
+		
+		// Set internal size to match mandel-workers.js expectations but with square aspect ratio
+		// Use coarseWidth (600) for both dimensions to maintain square aspect
+		canvas.width = 600;  // coarseWidth from mandel-workers.js (now square)
+		canvas.height = 600; // Make it square
 	}
 
 	// Update info display
@@ -232,8 +236,7 @@
 		}, 3000);
 	}
 
-	// Show info on interaction
-	document.getElementById('mandelCanvas').addEventListener('touchstart', showInfo);
+	// Show info on interaction - only for mouse, let mandel-workers.js handle touch
 	document.getElementById('mandelCanvas').addEventListener('mousedown', showInfo);
 	
 	// Initial setup
