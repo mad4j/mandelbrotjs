@@ -313,7 +313,7 @@ blockSize[i]=1;}
 needRedraw=1;needRecompute=lneedRecompute;eventOccurred=0;start=performance.now();rotationFrameStart=start;requestAnimationFrame(drawMandel);}
 function drawMandel()
 {const iter_max=iterations;const lcanvasWidth=canvasWidth;const lcanvasHeight=canvasHeight;const lscreenX=screenX;const lscreenY=screenY;const lzoom=zoom;if((rotating)&&(performance.now()<rotationFrameStart+15)){requestAnimationFrame(drawMandel);return 1;}
-rotationFrameStart=performance.now();if((!startupAnim)&&(iterations!=iterSlider.value)){iterations=Math.floor(iterSlider.value);startRender(1,1);needRedraw=1;}
+rotationFrameStart=performance.now();if((!startupAnim)&&(!autotuneIterations)&&(iterations!=iterSlider.value)){iterations=Math.floor(iterSlider.value);startRender(1,1);needRedraw=1;}
 if((showJulia)&&(juliaIterations!=juliaIterSlider.value)){juliaIterations=Math.floor(juliaIterSlider.value);juliaItersText.textContent=juliaIterations;updateCoords(canvasWidth/2,canvasHeight/2,"centre");}
 for(i=0;i<workers;i++)
 if((blockSize[i]>1)&&(performance.now()>zoomTime+500))
