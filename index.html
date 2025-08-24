@@ -104,6 +104,8 @@
         <div>ZOOM: <span id="zoom">1.0×</span></div>
         <div>ITER: <span id="iterations">128</span></div>
         <div id="precision-hint" style="font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 4px;"></div>
+        <div id="performance-info" style="font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 2px;"></div>
+        <div id="quality-info" style="font-size: 10px; color: rgba(255,255,0,0.8); margin-top: 2px;"></div>
     </div>
     
     <div class="gesture-hint">
@@ -477,10 +479,52 @@
         let maxIterations = 128;
         let currentPrecisionMode = 'gpu';
 
+        // Interaction and performance tracking
+        let isInteracting = false;
+        let interactionTimer = null;
+        let lastRenderTime = 0;
+        let renderStartTime = 0;
+        let frameCount = 0;
+        let totalRenderTime = 0;
+        
+        // Quality settings
+        const INTERACTION_TIMEOUT = 500; // ms to wait after interaction stops
+        const INTERACTIVE_QUALITY_FACTOR = 0.5; // Reduce quality during interaction
+
         // CPU rendering canvas for arbitrary precision
         let cpuCanvas = null;
         let cpuCtx = null;
         let cpuImageData = null;
+
+        // Interaction tracking functions
+        function startInteraction() {
+            isInteracting = true;
+            clearTimeout(interactionTimer);
+            document.getElementById('quality-info').textContent = 'Interactive mode (lower quality)';
+            document.getElementById('quality-info').style.display = 'block';
+        }
+        
+        function endInteraction() {
+            clearTimeout(interactionTimer);
+            interactionTimer = setTimeout(() => {
+                isInteracting = false;
+                document.getElementById('quality-info').style.display = 'none';
+                // Re-render at full quality
+                render();
+            }, INTERACTION_TIMEOUT);
+        }
+        
+        function getAdaptiveQualitySettings() {
+            if (!isInteracting) {
+                return { quality: 1.0, iterations: 1.0 };
+            }
+            
+            // Reduce quality during interaction
+            return { 
+                quality: INTERACTIVE_QUALITY_FACTOR, 
+                iterations: INTERACTIVE_QUALITY_FACTOR 
+            };
+        }
 
         // Gesture state
         let isDragging = false;
@@ -501,8 +545,12 @@
                 cpuCanvas = document.createElement('canvas');
                 cpuCtx = cpuCanvas.getContext('2d');
             }
-            // Use lower resolution for CPU rendering to maintain performance
-            const cpuRes = Math.min(512, Math.max(256, Math.min(canvas.width, canvas.height) / 4));
+            
+            // Use adaptive quality settings
+            const qualitySettings = getAdaptiveQualitySettings();
+            const baseResolution = Math.min(512, Math.max(256, Math.min(canvas.width, canvas.height) / 4));
+            const cpuRes = Math.floor(baseResolution * qualitySettings.quality);
+            
             cpuCanvas.width = cpuRes;
             cpuCanvas.height = cpuRes;
             cpuImageData = cpuCtx.createImageData(cpuCanvas.width, cpuCanvas.height);
@@ -510,22 +558,29 @@
 
         // CPU-based rendering for arbitrary precision with optimizations
         async function renderCPU() {
+            renderStartTime = performance.now();
+            
             const precisionInfo = getPrecisionForZoom(zoom);
+            const qualitySettings = getAdaptiveQualitySettings();
             const width = cpuCanvas.width;
             const height = cpuCanvas.height;
             const aspectRatio = canvas.width / canvas.height;
             
-            console.log(`Rendering with ${precisionInfo.mode} precision (${precisionInfo.precision} digits)`);
+            console.log(`Rendering with ${precisionInfo.mode} precision (${precisionInfo.precision} digits), quality: ${(qualitySettings.quality * 100).toFixed(0)}%`);
             
             const data = cpuImageData.data;
             
-            // Calculate adaptive iterations
+            // Calculate adaptive iterations with quality adjustment
             const baseIterations = 256;
             const adaptiveIterations = Math.min(1024, Math.max(baseIterations, 
-                Math.floor(baseIterations + Math.log10(Math.max(1, zoom)) * 32)));
+                Math.floor((baseIterations + Math.log10(Math.max(1, zoom)) * 32) * qualitySettings.iterations)));
             
-            // Batch processing for better performance
-            const batchSize = 16; // Process rows in batches
+            // Batch processing for better performance - adjust batch size based on quality
+            const baseBatchSize = isInteracting ? 32 : 16; // Larger batches during interaction for speed
+            const batchSize = Math.max(8, Math.floor(baseBatchSize * qualitySettings.quality));
+            
+            let processedPixels = 0;
+            const totalPixels = width * height;
             
             for (let batch = 0; batch < height; batch += batchSize) {
                 const endBatch = Math.min(batch + batchSize, height);
@@ -574,16 +629,24 @@
                             data[pixelIndex + 2] = intensity; // B
                         }
                         data[pixelIndex + 3] = 255; // A
+                        processedPixels++;
                     }
                 }
                 
                 // Update progress after each batch and allow UI updates
                 const progress = (endBatch / height * 100).toFixed(1);
-                document.getElementById('iterations').textContent = `${adaptiveIterations} (${progress}%)`;
+                const currentTime = performance.now();
+                const elapsedTime = (currentTime - renderStartTime) / 1000;
+                const megapixelsProcessed = processedPixels / 1000000;
+                const megapixelsPerSecond = elapsedTime > 0 ? (megapixelsProcessed / elapsedTime).toFixed(2) : '0';
                 
-                // Allow UI to update between batches
+                document.getElementById('iterations').textContent = `${adaptiveIterations} (${progress}%)`;
+                document.getElementById('performance-info').textContent = `${elapsedTime.toFixed(2)}s, ${megapixelsPerSecond} MP/s`;
+                
+                // Allow UI to update between batches (less frequently during interaction)
                 if (batch + batchSize < height) {
-                    await new Promise(resolve => setTimeout(resolve, 1));
+                    const updateDelay = isInteracting ? 5 : 1; // Less frequent updates during interaction
+                    await new Promise(resolve => setTimeout(resolve, updateDelay));
                 }
             }
             
@@ -615,8 +678,18 @@
             
             gl.deleteTexture(texture);
             
-            // Final progress update
+            // Final performance metrics
+            const finalTime = performance.now();
+            const totalTime = (finalTime - renderStartTime) / 1000;
+            const finalMegapixels = totalPixels / 1000000;
+            const finalMegapixelsPerSecond = (finalMegapixels / totalTime).toFixed(2);
+            
             document.getElementById('iterations').textContent = adaptiveIterations;
+            document.getElementById('performance-info').textContent = `${totalTime.toFixed(2)}s, ${finalMegapixelsPerSecond} MP/s`;
+            
+            lastRenderTime = totalTime;
+            frameCount++;
+            totalRenderTime += totalTime;
         }
 
         // Create simple texture rendering program
@@ -654,7 +727,13 @@
 
         async function render() {
             const precisionInfo = getPrecisionForZoom(zoom);
+            const qualitySettings = getAdaptiveQualitySettings();
             currentPrecisionMode = precisionInfo.mode;
+            
+            // Adjust canvas resolution if in interactive mode and using CPU rendering
+            if (isInteracting && (precisionInfo.mode === 'cpu' || precisionInfo.mode === 'cpu-perturbation')) {
+                resize(); // Update canvas resolution for current quality settings
+            }
             
             // Use CPU rendering for extreme zoom levels
             if (precisionInfo.mode === 'cpu' || precisionInfo.mode === 'cpu-perturbation') {
@@ -685,6 +764,13 @@
                     hintText = `${precisionInfo.precision}-digit perturbation method`;
                     break;
             }
+            
+            // Add quality indicator for interactive mode
+            if (isInteracting && qualitySettings.quality < 1.0) {
+                precisionText += ` @${(qualitySettings.quality * 100).toFixed(0)}%`;
+                hintText += ` (reduced quality)`;
+            }
+            
             document.getElementById('zoom').textContent = zoomText + precisionText;
             document.getElementById('precision-hint').textContent = hintText;
             if (!precisionInfo.mode.startsWith('cpu')) {
@@ -693,6 +779,8 @@
         }
 
         function renderGPU() {
+            renderStartTime = performance.now();
+            
             gl.useProgram(program);
             gl.bindVertexArray(vao);
             
@@ -701,20 +789,33 @@
             gl.uniform1f(zoomLocation, zoom);
             gl.uniform1f(aspectRatioLocation, canvas.width / canvas.height);
             
-            // Optimized iteration count based on zoom level and double precision support
+            // Optimized iteration count based on zoom level, double precision support, and interaction state
+            const qualitySettings = getAdaptiveQualitySettings();
             const baseIterations = hasDoublePrecision && zoom > 1000 ? 256 : 128;
             const adaptiveIterations = Math.min(1024, Math.max(baseIterations, 
-                Math.floor(baseIterations + Math.log10(Math.max(1, zoom)) * 32)));
+                Math.floor((baseIterations + Math.log10(Math.max(1, zoom)) * 32) * qualitySettings.iterations)));
             maxIterations = adaptiveIterations;
             
             gl.uniform1i(maxIterationsLocation, maxIterations);
             
             gl.drawArrays(gl.TRIANGLES, 0, 6);
+            
+            // GPU rendering is typically very fast, so measure performance
+            const renderTime = (performance.now() - renderStartTime) / 1000;
+            const megapixels = (canvas.width * canvas.height) / 1000000;
+            const megapixelsPerSecond = renderTime > 0 ? (megapixels / renderTime).toFixed(1) : 'N/A';
+            
+            document.getElementById('performance-info').textContent = `${renderTime.toFixed(3)}s, ${megapixelsPerSecond} MP/s`;
+            
+            lastRenderTime = renderTime;
+            frameCount++;
+            totalRenderTime += renderTime;
         }
 
         // Touch events
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            startInteraction();
             touches = Array.from(e.touches);
             
             if (touches.length === 1) {
@@ -768,6 +869,7 @@
             lastTouch = null;
             if (e.touches.length === 0) {
                 initialDistance = 0;
+                endInteraction();
             }
         });
 
@@ -778,6 +880,7 @@
         canvas.addEventListener('mousedown', (e) => {
             mouseDown = true;
             mouseStart = { x: e.clientX, y: e.clientY };
+            startInteraction();
         });
 
         canvas.addEventListener('mousemove', (e) => {
@@ -794,10 +897,13 @@
         canvas.addEventListener('mouseup', () => {
             mouseDown = false;
             mouseStart = null;
+            endInteraction();
         });
 
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
+            startInteraction();
+            
             const scale = e.deltaY > 0 ? 0.9 : 1.1;
             const oldZoom = zoom;
             zoom = Math.max(0.1, Math.min(1e30, zoom * scale)); // Increased max zoom
@@ -811,6 +917,7 @@
             }
             
             render();
+            endInteraction();
         });
 
         // Reset button
@@ -825,22 +932,28 @@
             switch(e.key) {
                 case '+':
                 case '=':
+                    startInteraction();
                     zoom *= 10;
                     zoom = Math.min(1e30, zoom);
                     render();
+                    endInteraction();
                     e.preventDefault();
                     break;
                 case '-':
+                    startInteraction();
                     zoom /= 10;
                     zoom = Math.max(0.1, zoom);
                     render();
+                    endInteraction();
                     e.preventDefault();
                     break;
                 case 'r':
                 case 'R':
+                    startInteraction();
                     center = [-0.5, 0.0];
                     zoom = 0.75;
                     render();
+                    endInteraction();
                     e.preventDefault();
                     break;
                 case 'h':
