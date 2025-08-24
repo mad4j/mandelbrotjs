@@ -136,22 +136,19 @@
         function createGrayscalePalette() {
             const colors = new Uint32Array(256);
             for (let i = 0; i < 255; i++) {
-                // Enhanced grayscale with smooth curve
-                let t = i / 255.0;
-                // Apply smoothstep for better visual contrast
-                t = t * t * (3.0 - 2.0 * t);
-                const gray = Math.floor((1.0 - t) * 255);
-                // Pack as RGBA in little-endian format (ABGR)
-                colors[i] = (255 << 24) | (gray << 16) | (gray << 8) | gray;
+                // Create bright grayscale values for better visibility
+                const gray = Math.floor(i * 255 / 254); // Use full range 0-255
+                // Pack as RGBA32: R=bits 31-24, G=bits 23-16, B=bits 15-8, A=bits 7-0
+                colors[i] = (gray << 24) | (gray << 16) | (gray << 8) | 255;
             }
-            colors[255] = 0; // Black for points in the set
+            colors[255] = 0x000000FF; // Black for points in the set (R=0, G=0, B=0, A=255)
             return colors;
         }
         
         const grayscalePalette = createGrayscalePalette();
 
         // State
-        let center = [-0.5, 0.0];
+        let center = [-0.5, 0.0]; // Back to the Mandelbrot set center
         let zoom = 0.75; // Will be calculated based on aspect ratio
         let maxIterations = 128;
         let userHasInteracted = false; // Track if user has panned or zoomed manually
@@ -163,7 +160,7 @@
             // With center at [-0.5, 0.0], we need:
             // - x range: [-2.5, 1.0] requires ±2.0 around -0.5
             // - y range: [-1.25, 1.25] requires ±1.25 around 0
-            return Math.min(aspectRatio / 2.0, 0.8);
+            return Math.min(aspectRatio / 4.0, 1.25 / 2.5);
         }
         
         // Initialize Web Workers
@@ -201,7 +198,7 @@
                 // Prepare pixel buffer for rendering (RGBA format)
                 const pixelBuffer = new Uint8Array(canvas.width * canvas.height * 4);
                 
-                // Start rendering - note the transferable objects syntax from the workers
+                // Start rendering with correct parameters for mandel-render.js
                 renderWorker.postMessage({
                     colours: grayscalePalette,
                     mandel: mandel.buffer,
@@ -211,7 +208,7 @@
                     arrayWidth: canvas.width,
                     smooth: e.data.smooth,
                     smoothMandel: smoothMandel ? smoothMandel.buffer : new ArrayBuffer(1)
-                }, [mandel.buffer, pixelBuffer.buffer].concat(smoothMandel ? [smoothMandel.buffer] : []));
+                }, [mandel.buffer, pixelBuffer.buffer, smoothMandel ? smoothMandel.buffer : new ArrayBuffer(1)]);
             }
         }
         
@@ -266,10 +263,11 @@
             smoothMandelData = new Uint8Array(canvas.width * canvas.height);
             
             // Calculate zoom factor and screen position for coordinate transformation
-            // The Web Worker expects screenX/screenY to be the pixel coordinates of the center point
-            const zoomFactor = zoom * Math.min(canvas.width, canvas.height) / 4;
-            const screenX = canvas.width / 2 - center[0] * zoomFactor;
-            const screenY = canvas.height / 2 + center[1] * zoomFactor;
+            // The Web Worker expects zoom as the scale factor (pixels per unit in complex plane)
+            const scale = zoom * Math.min(canvas.width, canvas.height) / 4;
+            // Calculate screen position so that center of canvas maps to our center coordinate
+            const screenX = canvas.width / 2 - center[0] * scale;
+            const screenY = canvas.height / 2 - center[1] * scale;
             
             // Start computation
             computeWorker.postMessage({
@@ -282,7 +280,7 @@
                 segmentHeight: canvas.height,
                 screenX: screenX,
                 screenY: screenY,
-                zoom: zoomFactor,
+                zoom: scale,
                 iterations: maxIterations,
                 smooth: 1,
                 oneShot: 0
