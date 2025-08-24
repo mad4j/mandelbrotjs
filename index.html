@@ -1,209 +1,263 @@
 
 <!DOCTYPE html>
-<html lang="en" onmousemove="mouseMove(event);">
+<html lang="it">
 	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" id="viewport" content="width=device-width, initial-scale=0.9">
-	        <meta name="description" content="Explore the famous Mandelbrot Set fractal with a fast and natural real-time scroll/zoom interface, much like a street map.  You can view additional useful information such as the graph axes and the corresponding Julia set for any point in the picture.  You can save and share the link to any fractal you create, change or animate its colours, and generate high quality 4k posters.  Background information is provided, including lessons on how you can create your own fractals.  Built with JavaScript/HTML/CSS." />
-	        <meta name="keywords" content="mandel, mandelbrot, mandelbrot set, julia, benoit mandelbrot, realtime, real time, real-time, fractal, 4k, javascript, zoom, map, fractint, vga, cga, color palette, color cycling" />
-		<title>Mandelbrot Set Explorer</title>
-		<link rel="shortcut icon" type="image/png" href="mandel-16.png"/>
+		<meta charset="UTF-8">
+		<meta name="viewport" id="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+		<meta name="theme-color" content="#000000">
+		<title>Mandelbrot Explorer</title>
 		<style>
-
-			input[type=checkbox] { 
-				margin: 1px 3px 0px 7px;
-				padding: 20px;
-				vertical-align: inherit;
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+				touch-action: none;
+				user-select: none;
+				-webkit-user-select: none;
 			}
-			@media only screen and (max-width: 768px) {
-				html * { font-size:22px; }
-			input[type=checkbox] {
-				transform: scale(1.5);
-				margin-top:3px;
-			}
-		}
-		input { font-family: inherit; font-size:inherit;}
-		button { font-family: inherit; font-size:inherit;}
-		select { font-family: inherit; font-size:inherit;}
-		 /* Modal dialog container, size of window, with dimmed background */
-		.modal {
-			display: none; 
-			position: fixed;
-			z-index: 1; 
-			left: 0;
-			top: 0;
-			width: 100%; 
-			height: 100%; 
-			overflow: auto; 
-			background-color: rgb(0,0,0);
-			background-color: rgba(0,0,0,0.4);
-			margin: 0px;
-		}
 
-		/* The actual modal dialog box */
-		.modal-content {
-		  	background-color: #fefefe;
-			margin: 5% auto; 
-			padding: 0;
-			border: 3px solid #000;
-			width: 50em; 
-			height: auto;
-		}
-		.modal-header {
-			padding: 2px 16px;
-			background-color: #083;
-			color: white;
-			color: white;
-		} 
-		.modal-body { padding: 2px 16px; }
-		.modal-footer {
-			text-align: center;
-			/*padding: 2px 16px;*/
-			padding: 10px 0px 10px 0px;
-			background-color: #083;
-			color: white;
-		}
-		.linkBtn {
-			text-decoration: none;
-			font-weight: bold;
-			padding: 2px 10px;
-			color: #fff;
-		}
-		.linkSelectedBtn {
-			text-decoration: none;
-			font-weight: bold;
-			font-size:120%;
-			padding: 2px 10px;
-			color: #fff;
-			background-color:#6a7;
-			border-color: black;
-			border-style: solid solid none solid;
-			border-width: 2px 2px 0px 2px;
-		}
-		input:invalid {
-			background-color: #f88;
-		}
-	</style>
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				background: #000;
+				overflow: hidden;
+				position: fixed;
+				width: 100%;
+				height: 100%;
+			}
+
+			canvas {
+				display: block;
+				width: 100%;
+				height: 100%;
+			}
+
+			.info {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+				color: rgba(255, 255, 255, 0.8);
+				font-size: 11px;
+				font-weight: 300;
+				letter-spacing: 0.5px;
+				pointer-events: none;
+				z-index: 10;
+				background: rgba(0, 0, 0, 0.5);
+				padding: 8px 12px;
+				border-radius: 4px;
+				backdrop-filter: blur(10px);
+				-webkit-backdrop-filter: blur(10px);
+				transition: opacity 0.3s ease;
+			}
+
+			.info.hidden {
+				opacity: 0;
+			}
+
+			.reset-btn {
+				position: absolute;
+				bottom: 20px;
+				right: 20px;
+				width: 40px;
+				height: 40px;
+				background: rgba(255, 255, 255, 0.1);
+				backdrop-filter: blur(10px);
+				-webkit-backdrop-filter: blur(10px);
+				border: 1px solid rgba(255, 255, 255, 0.2);
+				border-radius: 50%;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				color: rgba(255, 255, 255, 0.8);
+				font-size: 18px;
+				cursor: pointer;
+				transition: all 0.3s ease;
+				z-index: 10;
+			}
+
+			.reset-btn:active {
+				transform: scale(0.9);
+				background: rgba(255, 255, 255, 0.2);
+			}
+
+			.gesture-hint {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				color: rgba(255, 255, 255, 0.4);
+				font-size: 14px;
+				text-align: center;
+				pointer-events: none;
+				animation: fadeOut 3s ease-out forwards;
+				animation-delay: 1s;
+			}
+
+			@keyframes fadeOut {
+				to { opacity: 0; }
+			}
+		</style>
 </head>
-<body style="background:#444; font-family:sans-serif;">
+<body>
+	<div class="info" id="info">
+		<div>ZOOM: <span id="zoom">1.0×</span></div>
+		<div>ITER: <span id="iterations">286</span></div>
+	</div>
+	
+	<div class="gesture-hint">
+		Pinch to zoom • Drag to pan • Double tap to zoom
+	</div>
 
-<div id="posterDialog" class="modal">
-	<div class="modal-content">
-		<div class="modal-header">
-			<h2>Poster ready for download</h2>
-		</div>
-		<div class="modal-body" id="posterDialogBody">
-			<p>Click the link below to open or download your poster:</p>
-		</div>
-		<div class="modal-footer">
-			<a href="#/" title="Close" class="linkBtn" id="posterClose">&nbsp;&nbsp;&nbsp;Close&nbsp;&nbsp;&nbsp;</a>
-		</div>
-	</div>
-</div>
+	<div class="reset-btn" id="resetBtn">↺</div>
 
-<div id="aboutBox" class="modal">
-	<div class="modal-content" style="display:flex; flex-direction: column; margin:2% 5% 2% 5%; height:90%; width: 90%;">
-		<div class="modal-header" style="float:top; padding-top:15px;">
-			<a href="#/" id="showInstructionsBtn" class="linkBtn" onClick="showInstructions();">Instructions</a>&nbsp;
-			<a href="#/" id="showMathematicsBtn" class="linkBtn" onClick="showMathematics();">The Mandelbrot Set</a>&nbsp;
-			<a href="#/" id="showFractalsBtn" class="linkBtn" onClick="showFractals();">Fractals</a>&nbsp; 
-		</div>
-		<div class="modal-body" style="flex:1;">
-			<iframe id="aboutBoxContent" src="instructions.html" style="height:99%; width:100%; border:none;"></iframe>
-		</div>
-		<div class="modal-footer" style="margin-top:auto;">
-			<a href="#/" title="Close" class="linkBtn" id="aboutClose">&nbsp;&nbsp;Close&nbsp;&nbsp;</a>
-		</div>
-	</div>
-</div>
-
-<div id="linkDialog" class="modal">
-	<div class="modal-content">
-		<div class="modal-header">
-			<h2>Permanent link</h2>
-		</div>
-		<div class="modal-body">
-			<p>Copy the below URL:</p>
-			<p><span id="permalinkURL" style="word-wrap:break-word;"></span></p>
-			<p>Or click the link below then Bookmark it:</p>
-			<p><span id="permalinkAnchor"></span></p>
-		</div>
-		<div class="modal-footer">
-			<a href="#/" title="Close" class="linkBtn" id="linkClose">&nbsp;&nbsp;Close&nbsp;&nbsp;</a>
-		</div>
-	</div>
-</div>
-
-
-<div style="clear: both; margin:0px; padding: 0px;">
-	<div style="float:left; width: 804px; margin: 10px 20px 2px 20px;" >
-	<canvas id="mandelCanvas" width="800" height="600" style="width:800px; height:600px; margin: 2px; border: 2px solid black;outline: 5px solid gray;" onwheel="wheelMoved(event);">Sorry, your browser does not have HTML canvas support.</canvas><br>
-	<span id="workingText" style="float:right; color:#bbb;">Working...</span> 
-	<div id="logText" style="color:#ddd;">Working...</div> 
-</div>
-<br>
-<div style="display: inline-block; float:left; background: #cef; border: 1px solid gray; padding: 2px; margin: 10px; ">
-	<div style="border: 1px solid gray; padding: 5px;"><span><b>Max iterations:&nbsp;&nbsp;&nbsp;</b></span> <input type="range" min="1" max="1500" value="286" id="iterSlider"> 
-		<input type="number" min=1 max=1500 style="width: 4em;" value=286 id="itersInput" onChange="changeIters();"> &nbsp;&nbsp;
-		<input type="checkbox" id="showAxes" style="float:right;" onClick="toggleAxes();"> 
-		<span style="float:right;"><label for="showAxes">Axes</label></span>
-	</div>
-	<div style="min-width: 30em; border: 1px solid gray; padding: 5px; overflow:auto;"><b>Colours:&nbsp;</b> <span id="currentPalette" style="font-style:italic;">Original</span>&nbsp;
-		<button id="cycle" style="float:right; width: 5em;" onClick="toggleRotatePalette();">Animate</button>
-		<button id="nextPalette" value=" > " style="float: right; margin-right: 5px;" onClick="incrPalette();"> &gt; </button>
-		<button id="prevPalette" value=" < " style="float: right; margin-right: 2px;" onClick="decrPalette();"> &lt; </button>
-		<br><br>
-		<input type="checkbox" checked id="smooth" style="float:right;" onClick="toggleSmooth();"> 
-		<span style="float:right;"><label for="smooth">Smooth</label></span>
-	</div>
-	<div style="border: 1px solid gray; padding: 5px; overflow:auto;">
-		<div style="float:left;"><b>Coordinates&nbsp;</b>at<span id="coordSource"> centre</span><b>:</b>&nbsp;&nbsp;<br>
-		&nbsp;&nbsp;Re:&nbsp;<input id="xPosText" type="text" inputmode="numeric" pattern="^[\+\-]?(\d+(\.\d*)?|\.\d+)([eE][\+\-]?\d+)?$" maxlength="20" size="15" style="font-style:italic;font-size:small;" onChange="newCoords();"></input><br>
-		&nbsp;&nbsp;Im:&nbsp;<input id="yPosText" type="text" inputmode="numeric" pattern="^[\+\-]?(\d+(\.\d*)?|\.\d+)([eE][\+\-]?\d+)?$" maxlength="20" size="15" style="font-style:italic;font-size:small;" onChange="newCoords();"></input><br>
-		&nbsp;&nbsp;Iteration count:&nbsp;<span id="mandelText" style="font-style:italic;"></span><br>
-		&nbsp;&nbsp;Zoom:&nbsp;<span id="zoomText" style="font-style:italic;"></span><br>
-		<button value="About" id="about" style="float:left;" onClick="showAboutBox();">About</button>
-		<span style="float:left;">&nbsp;</span>
-		<select id="jumpTo" onchange="jumpTo();" style="float:left; ">
-			<option selected disabled value="choose">Jump To...</option>
-			<option value="home">    Home</option>
-			<option value="flower">    Flower</option>
-			<option value="julia">    Julia Island</option>
-			<!-- option value="elephant">    Elephant Valley</option -->
-			<option value="seahorse">    Seahorse Valley</option>
-                        <option value="spirals">    Spirals</option>
-			<option value="starfish">    Starfish</option>
-			<option value="sun">    Sun</option>
-			<option value="tendrils">    Tendrils</option>
-			<option value="tree">    Tree</option>
-		</select>
-		</div>
-			<button id="save" style="float:right;" onClick="saveState();">Permalink</button>
-			<button id="poster" style="float:right; margin-right: 5px;" onClick="makePoster();">Poster</button>
-			<br><br>
-			<div id="juliaSwitchArea" style="border: 1px solid transparent; padding: 3px; float:right; clear: right; overflow:auto; ">
-			<input type="checkbox" checked id="showJulia" style="float:right;" onClick="toggleJulia();"> 
-			<span style="float:right;"><label for="showJulia">Show Julia set</label></span>
-			<div id="juliaParamsArea" style="display: none;">
-				<input type="checkbox" id="lockJuliaColours" style="float:right;clear:right;" onClick="toggleLockJuliaColours();"> 
-				<span style="float:right;"><label for="lockJuliaColours">Freeze colours</label></span>
-				<span id="juliaItersText" style="float:right; clear:right;font-style:italic; width: 2em;"></span>
-				<input type="range" min="1" max="150" value="50" style="float:right; width:60px;" id="juliaIterSlider">
-				<span style="float:right;">Max iterations:&nbsp;</span>
-			</div>
-			</div>
-	</div>
-</div>
-	<div id="juliaArea" style="float:left; width: 404px; margin: auto; display:none; color:#bbb;" >
-		Julia set at<span id="coordSource2" > centre</span>:<br>
-	<canvas id="juliaCanvas" width="400" height="300" style="width:400px; height:300px; margin: 8px 2px 2px 2px; border: 2px solid black;outline: 5px solid white;" ></canvas><br>
-	</div>
-</div>
-<br>
-<br>
-<!-- div style="position: fixed; bottom: 0; width: 100%; margin: 0px; padding: 0px;">
-</div -->
+	<canvas id="mandelCanvas" onwheel="wheelMoved(event);">Sorry, your browser does not have HTML canvas support.</canvas>
+	
+	<!-- Hidden elements to prevent errors in mandel-workers.js -->
+	<canvas id="juliaCanvas" style="display: none;" width="1" height="1"></canvas>
+	<div id="logText" style="display: none;"></div>
+	<div id="workingText" style="display: none;"></div>
+	<div id="zoomText" style="display: none;"></div>
+	<div id="mandelText" style="display: none;"></div>
+	<div id="currentPalette" style="display: none;"></div>
+	<input id="iterSlider" type="range" style="display: none;" value="286">
+	<input id="itersInput" type="number" style="display: none;" value="286">
+	<input id="xPosText" type="text" style="display: none;">
+	<input id="yPosText" type="text" style="display: none;">
+	<div id="coordSource" style="display: none;"></div>
+	<div id="coordSource2" style="display: none;"></div>
+	<div id="cycle" style="display: none;"></div>
+	<div id="nextPalette" style="display: none;"></div>
+	<div id="prevPalette" style="display: none;"></div>
+	<div id="aboutClose" style="display: none;"></div>
+	<div id="linkClose" style="display: none;"></div>
+	<div id="posterClose" style="display: none;"></div>
+	<div id="aboutBox" style="display: none;"></div>
+	<div id="linkDialog" style="display: none;"></div>
+	<div id="posterDialog" style="display: none;"></div>
+	<div id="posterDialogBody" style="display: none;"></div>
+	<div id="permalinkURL" style="display: none;"></div>
+	<div id="permalinkAnchor" style="display: none;"></div>
+	<div id="aboutBoxContent" style="display: none;"></div>
+	<div id="showInstructionsBtn" style="display: none;"></div>
+	<div id="showMathematicsBtn" style="display: none;"></div>
+	<div id="showFractalsBtn" style="display: none;"></div>
+	<select id="jumpTo" style="display: none;"><option value="choose">Jump To...</option></select>
+	<input type="checkbox" id="showAxes" style="display: none;">
+	<input type="checkbox" id="showJulia" style="display: none;">
+	<input type="checkbox" id="lockJuliaColours" style="display: none;">
+	<input type="checkbox" id="smooth" style="display: none;">
+	<div id="juliaParamsArea" style="display: none;"></div>
+	<div id="juliaArea" style="display: none;"></div>
+	<div id="juliaSwitchArea" style="display: none;"></div>
+	<input id="juliaIterSlider" type="range" style="display: none;" value="50">
+	<div id="juliaItersText" style="display: none;"></div>
 
 <script src="mandel-workers.js"></script>
+<script>
+	// Stub functions for missing UI elements to prevent errors
+	function changeIters() {}
+	function toggleLockJuliaColours() {}
+	function toggleJulia() { showJulia = 0; }
+	function toggleAxes() { showAxes = 0; }
+	function toggleSmooth() { smooth = 1; }
+	function showAboutBox() {}
+	function jumpTo() {}
+	function newCoords() {}
+	function saveState() {}
+	function makePoster() {}
+	function incrPalette() { if (typeof nextPaletteClickHandler === 'function') nextPaletteClickHandler(); }
+	function decrPalette() { if (typeof prevPaletteClickHandler === 'function') prevPaletteClickHandler(); }
+	function toggleRotatePalette() { if (typeof cycleClickHandler === 'function') cycleClickHandler(); }
+
+	// Override variables that reference missing DOM elements
+	if (typeof logText === 'undefined' || !logText) logText = { innerHTML: '' };
+	if (typeof cycleText === 'undefined' || !cycleText) cycleText = { innerHTML: 'Animate' };
+	if (typeof workingText === 'undefined' || !workingText) workingText = { innerHTML: '', style: { visibility: 'hidden' } };
+	if (typeof zoomText === 'undefined' || !zoomText) zoomText = { innerHTML: '' };
+	if (typeof iterSlider === 'undefined' || !iterSlider) iterSlider = { value: 286 };
+	if (typeof mandelText === 'undefined' || !mandelText) mandelText = { innerHTML: '' };
+	if (typeof itersInput === 'undefined' || !itersInput) itersInput = { value: 286 };
+	if (typeof xPosText === 'undefined' || !xPosText) xPosText = { value: '', reportValidity: () => true };
+	if (typeof yPosText === 'undefined' || !yPosText) yPosText = { value: '', reportValidity: () => true };
+	if (typeof paletteText === 'undefined' || !paletteText) paletteText = { innerHTML: 'Original' };
+	if (typeof viewportTag === 'undefined' || !viewportTag) viewportTag = { setAttribute: () => {} };
+
+	// Disable Julia set display
+	showJulia = 0;
+	showAxes = 0;
+	smooth = 1;
+
+	// Responsive canvas setup
+	function resizeCanvas() {
+		const canvas = document.getElementById('mandelCanvas');
+		
+		// Set display size (css pixels)
+		canvas.style.width = window.innerWidth + 'px';
+		canvas.style.height = window.innerHeight + 'px';
+		
+		// Set internal size to match the expected mandel-workers.js size for now
+		// We'll scale during rendering
+		canvas.width = 800;  // canvasWidth/scaleFactor from mandel-workers.js
+		canvas.height = 600; // canvasHeight/scaleFactor from mandel-workers.js
+	}
+
+	// Update info display
+	function updateInfoDisplay() {
+		const zoomText = zoom > 1000 ? zoom.toExponential(2) : zoom.toFixed(1) + '×';
+		document.getElementById('zoom').textContent = zoomText;
+		document.getElementById('iterations').textContent = iterations;
+	}
+
+	// Reset functionality
+	function resetView() {
+		// Reset to home position like the original
+		destX = -1.34228;
+		destY = 0.0;
+		destZoom = 300;
+		destIters = 200;
+		travelling = 2;
+		startRender(1, 1);
+	}
+
+	// Initialize responsive canvas
+	window.addEventListener('resize', resizeCanvas);
+	document.getElementById('resetBtn').addEventListener('click', resetView);
+	
+	// Auto-hide info display
+	let infoTimeout;
+	function showInfo() {
+		document.getElementById('info').classList.remove('hidden');
+		clearTimeout(infoTimeout);
+		infoTimeout = setTimeout(() => {
+			document.getElementById('info').classList.add('hidden');
+		}, 3000);
+	}
+
+	// Show info on interaction
+	document.getElementById('mandelCanvas').addEventListener('touchstart', showInfo);
+	document.getElementById('mandelCanvas').addEventListener('mousedown', showInfo);
+	
+	// Initial setup
+	resizeCanvas();
+	showInfo();
+	
+	// Trigger initial render
+	if (typeof startRender === 'function') {
+		startRender(1, 1);
+	}
+
+	// Override the original updateCoords to update our info display
+	const originalUpdateCoords = window.updateCoords;
+	if (typeof originalUpdateCoords === 'function') {
+		window.updateCoords = function(x, y, source) {
+			originalUpdateCoords(x, y, source);
+			updateInfoDisplay();
+		};
+	} else {
+		// Create a basic updateCoords if it doesn't exist
+		window.updateCoords = function(x, y, source) {
+			updateInfoDisplay();
+		};
+	}
+</script>
 </body>
 </html>
