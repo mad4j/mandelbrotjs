@@ -155,13 +155,12 @@
 
         // Calculate initial zoom to ensure complete Mandelbrot set is visible
         function calculateInitialZoom() {
-            const aspectRatio = canvas.width / canvas.height;
             // Mandelbrot set bounds: x ∈ [-2.5, 1.0], y ∈ [-1.25, 1.25]
             // Total width = 3.5, total height = 2.5
-            // Choose zoom so that the set fits nicely with some padding
-            const xZoom = canvas.width / 4.0;  // Show roughly 4 units horizontally 
-            const yZoom = canvas.height / 3.0; // Show roughly 3 units vertically
-            return Math.min(xZoom, yZoom) * 0.8; // Add 20% padding
+            // Choose zoom so that the set fits with adequate padding
+            const xZoom = canvas.width / 5.0;  // Show roughly 5 units horizontally for padding
+            const yZoom = canvas.height / 4.0; // Show roughly 4 units vertically for padding
+            return Math.min(xZoom, yZoom) * 0.6; // More conservative with extra padding
         }
         
         // Initialize Web Workers
