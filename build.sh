@@ -27,7 +27,7 @@ rustup target add wasm32-unknown-unknown
 
 # Build the WebAssembly module
 echo "🔨 Compiling Rust to WebAssembly..."
-wasm-pack build --target no-modules --out-dir pkg
+wasm-pack build --target no-modules --out-dir pkg --release
 
 # Copy the built package to the root directory
 echo "📋 Copying WASM package to root directory..."
