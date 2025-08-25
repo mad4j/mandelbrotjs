@@ -119,16 +119,12 @@
 	<div id="workingText" style="display: none;"></div>
 	<div id="zoomText" style="display: none;"></div>
 	<div id="mandelText" style="display: none;"></div>
-	<div id="currentPalette" style="display: none;"></div>
 	<input id="iterSlider" type="range" style="display: none;" value="286">
 	<input id="itersInput" type="number" style="display: none;" value="286">
 	<input id="xPosText" type="text" style="display: none;">
 	<input id="yPosText" type="text" style="display: none;">
 	<div id="coordSource" style="display: none;"></div>
 	<div id="coordSource2" style="display: none;"></div>
-	<div id="cycle" style="display: none;"></div>
-	<div id="nextPalette" style="display: none;"></div>
-	<div id="prevPalette" style="display: none;"></div>
 	<div id="aboutClose" style="display: none;"></div>
 	<div id="linkClose" style="display: none;"></div>
 	<div id="posterClose" style="display: none;"></div>
@@ -157,13 +153,9 @@
 	function newCoords() {}
 	function saveState() {}
 	function makePoster() {}
-	function incrPalette() { if (typeof nextPaletteClickHandler === 'function') nextPaletteClickHandler(); }
-	function decrPalette() { if (typeof prevPaletteClickHandler === 'function') prevPaletteClickHandler(); }
-	function toggleRotatePalette() { if (typeof cycleClickHandler === 'function') cycleClickHandler(); }
 
 	// Override variables that reference missing DOM elements
 	if (typeof logText === 'undefined' || !logText) logText = { innerHTML: '' };
-	if (typeof cycleText === 'undefined' || !cycleText) cycleText = { innerHTML: 'Animate' };
 	if (typeof workingText === 'undefined' || !workingText) workingText = { innerHTML: '', style: { visibility: 'hidden' } };
 	if (typeof zoomText === 'undefined' || !zoomText) zoomText = { innerHTML: '' };
 	if (typeof iterSlider === 'undefined' || !iterSlider) iterSlider = { value: 286 };
@@ -171,7 +163,6 @@
 	if (typeof itersInput === 'undefined' || !itersInput) itersInput = { value: 286 };
 	if (typeof xPosText === 'undefined' || !xPosText) xPosText = { value: '', reportValidity: () => true };
 	if (typeof yPosText === 'undefined' || !yPosText) yPosText = { value: '', reportValidity: () => true };
-	if (typeof paletteText === 'undefined' || !paletteText) paletteText = { innerHTML: 'Original' };
 	if (typeof viewportTag === 'undefined' || !viewportTag) viewportTag = { setAttribute: () => {} };
 
 	// Disable Julia set display
