@@ -222,8 +222,8 @@ return 1;}
 var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;mandel[workerID]=new Uint8Array(e.data.mandel);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);while(renderWorkerRunning[workerID]!=0){console.log("Waiting for worker to end");}
 if(!renderWorker[workerID]){renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;}
 renderWorkerRunning[workerID]=1;if(blockSize[workerID]==1)
-renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:smoothMandel[workerID].buffer},[mandel[workerID].buffer],[smoothMandel[workerID].buffer],[mdSegment[workerID].buffer]);else
-renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdCoarseSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,smooth:smooth,smoothMandel:smoothMandel[workerID]},[mandel[workerID].buffer],[mdCoarseSegment[workerID].buffer],[smoothMandel[workerID].buffer]);}
+renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[workerID].buffer},[mandel[workerID].buffer],[smoothMandel[workerID].buffer],[mdSegment[workerID].buffer]);else
+renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdCoarseSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,segmentHeight:chunkHeight/scaleFactor,smooth:smooth,smoothMandel:smoothMandel[workerID]},[mandel[workerID].buffer],[mdCoarseSegment[workerID].buffer],[smoothMandel[workerID].buffer]);}
 var onRenderEnded=function(e)
 {var workerID=e.data.workerID;mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
 // Handle ImageBitmap response when OffscreenCanvas is used
@@ -341,7 +341,7 @@ workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
 computeWorker[i].postMessage({mandelBuffer:mandel[i].buffer,workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer]);else
 computeWorker[i].postMessage({mandelBuffer:mandel[i].buffer,workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer]);}
 else{workersRunning++;if(!renderWorker[i]){renderWorker[i]=new Worker("mandel-render.js");renderWorker[i].onmessage=onRenderEnded;}
-renderWorkerRunning[i]=1;renderWorker[i].postMessage({colours:colours,mandel:mandel[i].buffer,canvasBuffer:mdSegment[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer],[mdSegment[i].buffer]);}}}}
+renderWorkerRunning[i]=1;renderWorker[i].postMessage({colours:colours,mandel:mandel[i].buffer,canvasBuffer:mdSegment[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer],[mdSegment[i].buffer]);}}}}
 if((workersRunning==0)&&(rotating==1))
 rotatePalette(-1);else
 requestAnimationFrame(drawMandel);}

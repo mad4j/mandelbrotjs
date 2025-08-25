@@ -4,7 +4,7 @@ const supportsOffscreenCanvas = typeof OffscreenCanvas !== 'undefined';
 self.onmessage=function(e)
 {const blockSize=e.data.blockSize;const arrayWidth=e.data.arrayWidth;const workerID=e.data.workerID;let mandel=new Uint8Array(e.data.mandel);let colours=e.data.colours;let pixelPos=0;const larrayWidth=arrayWidth;let out=0;let packedColour=0;let packedColour1=0;let r=0;let g=0;let b=0;let r1=0;let g1=0;let b1=0;if((e.data.smooth==1)&&(blockSize==1))
 smooth=1;else
-smooth=0;let smoothMandel=new Uint8Array(e.data.smoothMandel);let segmentHeight=blockSize==1?300:150;let lblockSize=blockSize==1?1:blockSize/2;
+smooth=0;let smoothMandel=new Uint8Array(e.data.smoothMandel);let segmentHeight=e.data.segmentHeight || (blockSize==1?300:150);let lblockSize=blockSize==1?1:blockSize/2;
 
 // Use OffscreenCanvas when available, fallback to pixel array
 if (supportsOffscreenCanvas) {
