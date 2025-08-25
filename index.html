@@ -168,6 +168,10 @@
 	if (typeof workingText === 'undefined' || !workingText) workingText = { innerHTML: '', style: { visibility: 'hidden' } };
 	if (typeof zoomText === 'undefined' || !zoomText) zoomText = { innerHTML: '' };
 	if (typeof iterSlider === 'undefined' || !iterSlider) iterSlider = { value: 286 };
+
+	// Global variable to track actual WASM usage reported by workers
+	let actualWasmUsage = false;
+	let wasmUsageDetected = false;
 	if (typeof mandelText === 'undefined' || !mandelText) mandelText = { innerHTML: '' };
 	if (typeof itersInput === 'undefined' || !itersInput) itersInput = { value: 286 };
 	if (typeof xPosText === 'undefined' || !xPosText) xPosText = { value: '', reportValidity: () => true };
@@ -201,8 +205,15 @@
 		const zoomText = zoom > 1000 ? zoom.toExponential(2) : zoom.toFixed(1) + '×';
 		document.getElementById('zoom').textContent = zoomText;
 		document.getElementById('iterations').textContent = iterations;
-		// Update compute engine information - simple approach based on worker script selection
-		const engineText = (typeof COMPUTE_WORKER_SCRIPT !== 'undefined' && COMPUTE_WORKER_SCRIPT.includes('wasm')) ? 'WASM' : 'JS';
+		
+		// Update compute engine information based on actual WASM usage
+		let engineText;
+		if (wasmUsageDetected) {
+			engineText = actualWasmUsage ? 'WASM' : 'JS (fallback)';
+		} else {
+			// Fallback to old method if no usage detected yet
+			engineText = (typeof COMPUTE_WORKER_SCRIPT !== 'undefined' && COMPUTE_WORKER_SCRIPT.includes('wasm')) ? 'WASM (loading...)' : 'JS';
+		}
 		document.getElementById('computeEngine').textContent = engineText;
 	}
 
@@ -277,6 +288,42 @@
 			updateInfoDisplay();
 		};
 	}
+
+	// Override onComputeEnded to track WASM usage
+	window.addEventListener('load', function() {
+		// Wait for mandel-workers.js to load, then override the onComputeEnded function
+		setTimeout(function() {
+			if (typeof onComputeEnded !== 'undefined') {
+				const originalOnComputeEnded = onComputeEnded;
+				window.onComputeEnded = function(e) {
+					// Track WASM usage if reported by worker
+					if (e.data.hasOwnProperty('usedWasm')) {
+						wasmUsageDetected = true;
+						actualWasmUsage = e.data.usedWasm;
+						if (e.data.usedWasm) {
+							console.log('Using WebAssembly for computation');
+						} else {
+							console.log('Using JavaScript fallback for computation');
+						}
+					}
+					// Call original function
+					return originalOnComputeEnded(e);
+				};
+			}
+			
+			// Also override the oneshot compute function
+			if (typeof onOneShotComputeEnded !== 'undefined') {
+				const originalOnOneShotComputeEnded = onOneShotComputeEnded;
+				window.onOneShotComputeEnded = function(e) {
+					if (e.data.hasOwnProperty('usedWasm')) {
+						wasmUsageDetected = true;
+						actualWasmUsage = e.data.usedWasm;
+					}
+					return originalOnOneShotComputeEnded(e);
+				};
+			}
+		}, 100);
+	});
 </script>
 </body>
 </html>

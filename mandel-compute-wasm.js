@@ -5,24 +5,40 @@ let wasmModule = null;
 let wasmInitialized = false;
 
 // Initialize WebAssembly module
-async function initWasm() {
-    if (wasmInitialized) return;
+function initWasm() {
+    if (wasmInitialized) return Promise.resolve();
     
-    try {
-        // Import the WASM module
-        const wasmImport = await import('./pkg/mandel_wasm.js');
-        await wasmImport.default();
-        wasmModule = wasmImport;
-        wasmInitialized = true;
-        console.log('Rust WebAssembly module loaded successfully');
-    } catch (error) {
-        console.warn('Failed to load WebAssembly module, falling back to JavaScript:', error);
-        wasmInitialized = false;
-    }
+    return new Promise((resolve, reject) => {
+        try {
+            // Use importScripts for better worker compatibility
+            importScripts('./pkg/mandel_wasm.js');
+            
+            // Initialize the WASM module
+            if (typeof wasm_bindgen !== 'undefined') {
+                wasm_bindgen('./pkg/mandel_wasm_bg.wasm').then(() => {
+                    wasmModule = wasm_bindgen;
+                    wasmInitialized = true;
+                    console.log('Rust WebAssembly module loaded successfully');
+                    resolve();
+                }).catch(error => {
+                    console.warn('Failed to initialize WebAssembly module:', error);
+                    wasmInitialized = false;
+                    reject(error);
+                });
+            } else {
+                throw new Error('wasm_bindgen not available');
+            }
+        } catch (error) {
+            console.warn('Failed to load WebAssembly module, falling back to JavaScript:', error);
+            wasmInitialized = false;
+            reject(error);
+        }
+    });
 }
 
 // Fallback JavaScript implementation (same as original mandel-compute.js)
 function jsMandelCompute(e) {
+    const startTime = performance.now();
     const oneShot = e.data.oneShot;
     const screenX = e.data.screenX;
     const screenY = e.data.screenY;
@@ -86,7 +102,7 @@ function jsMandelCompute(e) {
             
             if (oneShot) {
                 oneShotResult = iteration;
-                self.postMessage({ oneShotResult: oneShotResult });
+                self.postMessage({ oneShotResult: oneShotResult, usedWasm: false });
                 return 1;
             }
             
@@ -108,21 +124,22 @@ function jsMandelCompute(e) {
         }
     }
     
+    const computeTime = performance.now() - startTime;
+    console.log(`JS computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
+    
     self.postMessage({
         finished: 1,
         mandel: mandelData.buffer,
         workerID: workerID,
         smooth: smooth,
-        smoothMandel: smoothMandel.buffer
+        smoothMandel: smoothMandel.buffer,
+        usedWasm: false,
+        computeTime: computeTime
     }, [mandelData.buffer], [smoothMandel.buffer]);
 }
 
 // WebAssembly-enhanced implementation
-async function wasmMandelCompute(e) {
-    if (!wasmInitialized) {
-        await initWasm();
-    }
-    
+function wasmMandelCompute(e) {
     if (!wasmInitialized || !wasmModule) {
         // Fallback to JavaScript implementation
         jsMandelCompute(e);
@@ -144,8 +161,8 @@ async function wasmMandelCompute(e) {
         
         try {
             const result = wasmModule.mandel_one_shot(xnorm, ynorm, iter_max, smooth);
-            const oneShotResult = result.iterations;
-            self.postMessage({ oneShotResult: oneShotResult });
+            const oneShotResult = result.iterations();
+            self.postMessage({ oneShotResult: oneShotResult, usedWasm: true });
             return;
         } catch (error) {
             console.warn('WASM one-shot computation failed, falling back to JS:', error);
@@ -162,6 +179,7 @@ async function wasmMandelCompute(e) {
     const segmentHeight = e.data.segmentHeight;
     
     try {
+        const startTime = performance.now();
         let mandelData, smoothMandel;
         
         if (smooth) {
@@ -169,8 +187,8 @@ async function wasmMandelCompute(e) {
                 startLine, segmentHeight, canvasWidth,
                 screenX, screenY, zoom, iter_max, blockSize
             );
-            mandelData = new Uint8Array(result.mandel_data);
-            smoothMandel = new Uint8Array(result.smooth_data);
+            mandelData = new Uint8Array(result.mandel_data());
+            smoothMandel = new Uint8Array(result.smooth_data());
         } else {
             const resultData = wasmModule.mandel_compute_segment(
                 startLine, segmentHeight, canvasWidth,
@@ -179,6 +197,9 @@ async function wasmMandelCompute(e) {
             mandelData = new Uint8Array(resultData);
             smoothMandel = new Uint8Array(1); // Empty for non-smooth
         }
+        
+        const computeTime = performance.now() - startTime;
+        console.log(`WASM computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
         
         // Send periodic progress updates for fine rendering
         if (blockSize == 1) {
@@ -191,7 +212,9 @@ async function wasmMandelCompute(e) {
             mandel: mandelData.buffer,
             workerID: workerID,
             smooth: smooth ? 1 : 0,
-            smoothMandel: smoothMandel.buffer
+            smoothMandel: smoothMandel.buffer,
+            usedWasm: true,
+            computeTime: computeTime
         }, [mandelData.buffer], [smoothMandel.buffer]);
         
     } catch (error) {
@@ -200,10 +223,24 @@ async function wasmMandelCompute(e) {
     }
 }
 
+// Global variable to track actual usage
+let actuallyUsingWasm = false;
+
 // Main message handler
-self.onmessage = async function(e) {
-    await wasmMandelCompute(e);
+self.onmessage = function(e) {
+    wasmMandelCompute(e);
 };
 
-// Initialize WASM on worker startup
-initWasm();
+// Initialize WASM on worker startup and report status
+initWasm().then(() => {
+    if (wasmInitialized) {
+        actuallyUsingWasm = true;
+        console.log('WASM worker ready - will use WebAssembly for computations');
+    } else {
+        actuallyUsingWasm = false;
+        console.log('WASM worker ready - will use JavaScript fallback for computations');
+    }
+}).catch(error => {
+    actuallyUsingWasm = false;
+    console.warn('WASM worker initialization failed, using JavaScript fallback:', error);
+});
