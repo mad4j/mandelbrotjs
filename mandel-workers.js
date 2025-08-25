@@ -8,11 +8,101 @@ var workers = (function() {
     return 4;
 })();
 
+// Persistent worker pools - workers are created once and reused
+var workerPool = {
+    compute: new Array(workers),
+    render: new Array(workers),
+    julia: null,
+    juliaRender: null,
+    oneShot: null,
+    
+    // Initialize all workers
+    init: function() {
+        // Create compute workers
+        for(let i = 0; i < workers; i++) {
+            this.compute[i] = new Worker("mandel-compute.js");
+            this.compute[i].onmessage = onComputeEnded;
+        }
+        
+        // Create render workers
+        for(let i = 0; i < workers; i++) {
+            this.render[i] = new Worker("mandel-render.js");
+            this.render[i].onmessage = onRenderEnded;
+        }
+        
+        // Create Julia workers
+        this.julia = new Worker("julia-compute.js");
+        this.julia.onmessage = onJuliaComputeEnded;
+        
+        this.juliaRender = new Worker("julia-render.js");
+        this.juliaRender.onmessage = onJuliaRenderEnded;
+        
+        // Create one-shot worker
+        this.oneShot = new Worker("mandel-compute.js");
+        this.oneShot.onmessage = onOneShotComputeEnded;
+    },
+    
+    // Cancel all running jobs
+    cancelAll: function() {
+        for(let i = 0; i < workers; i++) {
+            this.compute[i].postMessage({cancel: true});
+            this.render[i].postMessage({cancel: true});
+        }
+        if(this.julia) this.julia.postMessage({cancel: true});
+        if(this.juliaRender) this.juliaRender.postMessage({cancel: true});
+    },
+    
+    // Flush all workers (prepare for new jobs)
+    flushAll: function() {
+        for(let i = 0; i < workers; i++) {
+            this.compute[i].postMessage({flush: true});
+            this.render[i].postMessage({flush: true});
+        }
+        if(this.julia) this.julia.postMessage({flush: true});
+        if(this.juliaRender) this.juliaRender.postMessage({flush: true});
+    }
+};
+
 var blockSize=new Uint8Array(workers);
 for(var i=0; i<workers; i++) { blockSize[i]=16; }
 var colours=new Uint32Array(256);var juliaColours=new Uint32Array(256);var lockJuliaColours=0;var vga=new Uint32Array(256);const paletteCount=13;var currentPalette=-1;var currentRotation=0;var rotating=0;var renderCount=0;var travelling=0;var movingToSaved=0;var destX=0;var destY=0;var destZoom=0;var destIters=0;var juliaWorker;var juliaRenderWorker;var computeWorker=new Array();var computeWorkerRunning=new Uint8Array(workers);var renderWorker=new Array();var renderWorkerRunning=new Uint8Array(workers);var needToRun=new Uint8Array(workers);var finished=new Uint8Array(workers);var timesTaken=new Array(20);var timesTakenSorted=new Array(20);var benchmarkTime=2;var drawingJulia=0;
-for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;const chunkHeight=canvasHeight/workers;var needRedraw=0;var needRecompute=1;var showAxes=0;var showJulia=1;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var jc=document.getElementById("juliaCanvas");var jctx=jc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var showJuliaBox=document.getElementById("showJulia");var juliaParamsArea=document.getElementById("juliaParamsArea");var lockJuliaColoursBox=document.getElementById("lockJuliaColours");var juliaIterSlider=document.getElementById("juliaIterSlider");var juliaItersText=document.getElementById("juliaItersText");var smoothBox=document.getElementById("smooth");var juliaArea=document.getElementById("juliaArea");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});offScreen.width=canvasWidth;offScreen.height=canvasHeight;var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});coarse.width=coarseWidth;coarse.height=coarseHeight;var juliaOffScreen=document.createElement('canvas');var juliaOffScreenCtx=juliaOffScreen.getContext("2d",{alpha:false});juliaOffScreen.width=juliaCanvasWidth;juliaOffScreen.height=juliaCanvasHeight;var mjuliaOffScreenCtx=juliaOffScreenCtx.getImageData(0,0,juliaCanvasWidth,juliaCanvasHeight);var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var mJulia=new Array();var mdJulia=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();var mandel=new Array();var julia=new Uint8Array(juliaCanvasWidth*juliaCanvasHeight);var smoothMandel=new Array();var percentDone=new Array();for(i=0;i<workers;i++){computeWorkerRunning[i]=0;renderWorkerRunning[i]=0;offScreenSegment[i]=document.createElement('canvas');offScreenSegmentCtx[i]=offScreenSegment[i].getContext("2d",{alpha:false});offScreenSegment[i].width=canvasWidth;offScreenSegment[i].height=canvasHeight/workers;mSegment[i]=offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,canvasHeight/workers);mdSegment[i]=new Uint8ClampedArray(canvasWidth*canvasHeight/workers*4);mdSegment[i].set(mSegment[i].data);coarseSegment[i]=document.createElement('canvas');coarseSegmentCtx[i]=coarseSegment[i].getContext("2d",{alpha:false});coarseSegment[i].width=coarseWidth;coarseSegment[i].height=coarseHeight/workers;mCoarseSegment[i]=coarseSegmentCtx[i].getImageData(0,0,coarseWidth,coarseHeight/workers);mdCoarseSegment[i]=mCoarseSegment[i].data;mandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));}
-mJulia=juliaOffScreenCtx.getImageData(0,0,juliaCanvasWidth,juliaCanvasHeight);mdJulia=new Uint8ClampedArray(juliaCanvasWidth*juliaCanvasHeight*4);mdJulia.set(mJulia.data);var zoomSlider;var oldMouseX=-1;var oldMouseX=-1;var worker=0;mc.addEventListener("touchstart",touchStart,false);mc.addEventListener("touchmove",touchMove,false);mc.addEventListener("touchend",touchEnd,false);window.addEventListener("resize",setViewport,false);function setViewport()
+for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;const chunkHeight=canvasHeight/workers;var needRedraw=0;var needRecompute=1;var showAxes=0;var showJulia=1;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var jc=document.getElementById("juliaCanvas");var jctx=jc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var showJuliaBox=document.getElementById("showJulia");var juliaParamsArea=document.getElementById("juliaParamsArea");var lockJuliaColoursBox=document.getElementById("lockJuliaColours");var juliaIterSlider=document.getElementById("juliaIterSlider");var juliaItersText=document.getElementById("juliaItersText");var smoothBox=document.getElementById("smooth");var juliaArea=document.getElementById("juliaArea");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});offScreen.width=canvasWidth;offScreen.height=canvasHeight;var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});coarse.width=coarseWidth;coarse.height=coarseHeight;var juliaOffScreen=document.createElement('canvas');var juliaOffScreenCtx=juliaOffScreen.getContext("2d",{alpha:false});juliaOffScreen.width=juliaCanvasWidth;juliaOffScreen.height=juliaCanvasHeight;var mjuliaOffScreenCtx=juliaOffScreenCtx.getImageData(0,0,juliaCanvasWidth,juliaCanvasHeight);var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var mJulia=new Array();var mdJulia=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();var mandel=new Array();var julia=new Uint8Array(juliaCanvasWidth*juliaCanvasHeight);var smoothMandel=new Array();var percentDone=new Array();
+
+// Pre-allocate persistent buffers to avoid recreation
+var bufferPool = {
+    // Mandel data buffers (persistent)
+    mandel: new Array(workers),
+    smoothMandel: new Array(workers),
+    // Pixel buffers (persistent)
+    pixels: new Array(workers),
+    coarsePixels: new Array(workers),
+    // Julia buffers (persistent)
+    juliaData: new Uint8Array(juliaCanvasWidth*juliaCanvasHeight),
+    juliaPixels: new Uint8Array(juliaCanvasWidth*juliaCanvasHeight*4),
+    
+    init: function() {
+        for(let i = 0; i < workers; i++) {
+            this.mandel[i] = new Uint8Array(canvasWidth*(canvasHeight/workers));
+            this.smoothMandel[i] = new Uint8Array(canvasWidth*(canvasHeight/workers));
+            this.pixels[i] = new Uint8ClampedArray(canvasWidth*canvasHeight/workers*4);
+            this.coarsePixels[i] = new Uint8ClampedArray(coarseWidth*coarseHeight/workers*4);
+            // Initialize alpha channel
+            for(let j = 3; j < this.pixels[i].length; j += 4) {
+                this.pixels[i][j] = 255;
+            }
+            for(let j = 3; j < this.coarsePixels[i].length; j += 4) {
+                this.coarsePixels[i][j] = 255;
+            }
+        }
+        // Initialize alpha channel for Julia
+        for(let j = 3; j < this.juliaPixels.length; j += 4) {
+            this.juliaPixels[j] = 255;
+        }
+    }
+};
+
+for(i=0;i<workers;i++){computeWorkerRunning[i]=0;renderWorkerRunning[i]=0;offScreenSegment[i]=document.createElement('canvas');offScreenSegmentCtx[i]=offScreenSegment[i].getContext("2d",{alpha:false});offScreenSegment[i].width=canvasWidth;offScreenSegment[i].height=canvasHeight/workers;mSegment[i]=offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,canvasHeight/workers);mdSegment[i]=new Uint8ClampedArray(canvasWidth*canvasHeight/workers*4);coarseSegment[i]=document.createElement('canvas');coarseSegmentCtx[i]=coarseSegment[i].getContext("2d",{alpha:false});coarseSegment[i].width=coarseWidth;coarseSegment[i].height=coarseHeight/workers;mCoarseSegment[i]=coarseSegmentCtx[i].getImageData(0,0,coarseWidth,coarseHeight/workers);mdCoarseSegment[i]=mCoarseSegment[i].data;mandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));}
+mJulia=juliaOffScreenCtx.getImageData(0,0,juliaCanvasWidth,juliaCanvasHeight);mdJulia=new Uint8ClampedArray(juliaCanvasWidth*juliaCanvasHeight*4);var zoomSlider;var oldMouseX=-1;var oldMouseX=-1;var worker=0;mc.addEventListener("touchstart",touchStart,false);mc.addEventListener("touchmove",touchMove,false);mc.addEventListener("touchend",touchEnd,false);window.addEventListener("resize",setViewport,false);function setViewport()
 {var ww=window.screen.width;var cw=canvasWidth/2+50;if(ww<cw){var ratio=ww/cw;viewportTag.setAttribute("content","width="+ww+",initial-scale="+ratio);document.body.style.fontSize=Math.floor(70/ratio)+"%";var checkBoxes=document.querySelectorAll("input[type=checkbox]");var checkBoxCount=checkBoxes.length;for(var i=0;i<checkBoxCount;i++)
 checkBoxes[i].style.transform="scale("+0.7/ratio+")";}
 else{viewportTag.setAttribute("content","width="+ww+",initial-scale=1.0");}}
@@ -76,7 +166,16 @@ rotatePalette(lcurrentRotation);if(lshowAxes>0){showAxes=1;showAxesBox.checked=t
 showAxes=0;if(lsmooth>0){smooth=1;smoothBox.checked=true;}else
 smooth=0;}
 function killWorkers()
-{for(var i=0;i<workers;i++){if((blockSize[i]<4)&&(computeWorkerRunning[i]==1)){computeWorker[i].terminate();computeWorker[i]=null;computeWorkerRunning[i]=0;workersRunning--;mandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));}}}
+{
+// Instead of terminating workers, just cancel their current jobs
+workerPool.cancelAll();
+// Reset running states
+for(var i=0;i<workers;i++){
+    computeWorkerRunning[i]=0;
+    renderWorkerRunning[i]=0;
+}
+workersRunning=0;
+}
 function drawAxes()
 {var canvasWidthScaled=canvasWidth/scaleFactor;var canvasHeightScaled=canvasHeight/scaleFactor;var originX=Math.round(screenX/scaleFactor);var originY=Math.round(screenY/scaleFactor);mctx.translate(0.5,0.5);mctx.strokeStyle="#DDDDDD";mctx.font="10px Sans-serif";mctx.lineWidth=1.0;mctx.beginPath();mctx.moveTo(0,originY);mctx.lineTo(canvasWidthScaled,originY);mctx.stroke();mctx.beginPath();mctx.moveTo(originX,0);mctx.lineTo(originX,canvasHeightScaled);mctx.stroke();mctx.beginPath();mctx.arc(originX,originY,5,0,2*Math.PI);mctx.stroke();var step=1.0;if(zoom>250)
 step=0.5;if(zoom>600)
@@ -95,14 +194,13 @@ tickSize=3;tickX=Math.round((screenX+i*zoom)/scaleFactor);tickY=Math.round((scre
 continue;mctx.beginPath();mctx.moveTo(tickX,originY-tickSize);mctx.lineTo(tickX,originY+tickSize);mctx.stroke();mctx.strokeText(-Math.round(i*10000)/10000,originX+6,tickY+4);}}
 mctx.translate(-0.5,-0.5);}
 var onJuliaComputeEnded=function(e)
-{julia=new Uint8Array(e.data.julia);if(!juliaRenderWorker){juliaRenderWorker=new Worker("julia-render.js");juliaRenderWorker.onmessage=onJuliaRenderEnded;}
-juliaRenderWorker.postMessage({colours:juliaColours,julia:julia.buffer,canvasBuffer:mdJulia.buffer,arrayWidth:juliaCanvasWidth,arrayHeight:juliaCanvasHeight},[julia.buffer],[mdJulia.buffer]);}
+{bufferPool.juliaData=new Uint8Array(e.data.julia);workerPool.juliaRender.postMessage({colours:juliaColours,julia:bufferPool.juliaData.buffer,canvasBuffer:bufferPool.juliaPixels.buffer,arrayWidth:juliaCanvasWidth,arrayHeight:juliaCanvasHeight},[bufferPool.juliaData.buffer],[bufferPool.juliaPixels.buffer]);}
 var onJuliaRenderEnded=function(e)
-{julia=new Uint8Array(e.data.juliaBuffer);mdJulia=new Uint8ClampedArray(e.data.pixelsBuffer);mJulia.data.set(mdJulia);juliaOffScreenCtx.putImageData(mJulia,0,0);jctx.drawImage(juliaOffScreen,0,0,juliaCanvasWidth/2,juliaCanvasHeight/2);var x=xmouse*juliaCanvasWidth/8+juliaCanvasWidth/4;var y=ymouse*juliaCanvasHeight/6+juliaCanvasHeight/4;jctx.strokeStyle="#FFFFFF";jctx.lineWidth=2.0;jctx.beginPath();jctx.moveTo(x-5,y);jctx.lineTo(x+5,y);jctx.stroke();jctx.beginPath();jctx.moveTo(x,y-5);jctx.lineTo(x,y+5);jctx.stroke();if(showAxes){var originX=Math.round(juliaCanvasWidth/4);var originY=Math.round(juliaCanvasHeight/4);jctx.translate(0.5,0.5);jctx.strokeStyle="#DDDDDD";jctx.font="10px Sans-serif";jctx.lineWidth=1.0;jctx.beginPath();jctx.moveTo(0,originY);jctx.lineTo(juliaCanvasWidth/2,originY);jctx.stroke();jctx.beginPath();jctx.moveTo(originX,0);jctx.lineTo(originX,juliaCanvasHeight/2);jctx.stroke();jctx.beginPath();jctx.arc(originX,originY,5,0,2*Math.PI);jctx.stroke();var step=0.5;for(i=-3;i<=3;i+=step){if(i!=0){if(i%1.0==0)
+{bufferPool.juliaData=new Uint8Array(e.data.juliaBuffer);bufferPool.juliaPixels=new Uint8ClampedArray(e.data.pixelsBuffer);mJulia.data.set(bufferPool.juliaPixels);juliaOffScreenCtx.putImageData(mJulia,0,0);jctx.drawImage(juliaOffScreen,0,0,juliaCanvasWidth/2,juliaCanvasHeight/2);var x=xmouse*juliaCanvasWidth/8+juliaCanvasWidth/4;var y=ymouse*juliaCanvasHeight/6+juliaCanvasHeight/4;jctx.strokeStyle="#FFFFFF";jctx.lineWidth=2.0;jctx.beginPath();jctx.moveTo(x-5,y);jctx.lineTo(x+5,y);jctx.stroke();jctx.beginPath();jctx.moveTo(x,y-5);jctx.lineTo(x,y+5);jctx.stroke();if(showAxes){var originX=Math.round(juliaCanvasWidth/4);var originY=Math.round(juliaCanvasHeight/4);jctx.translate(0.5,0.5);jctx.strokeStyle="#DDDDDD";jctx.font="10px Sans-serif";jctx.lineWidth=1.0;jctx.beginPath();jctx.moveTo(0,originY);jctx.lineTo(juliaCanvasWidth/2,originY);jctx.stroke();jctx.beginPath();jctx.moveTo(originX,0);jctx.lineTo(originX,juliaCanvasHeight/2);jctx.stroke();jctx.beginPath();jctx.arc(originX,originY,5,0,2*Math.PI);jctx.stroke();var step=0.5;for(i=-3;i<=3;i+=step){if(i!=0){if(i%1.0==0)
 tickSize=4;else
 tickSize=3;tickX=Math.round((juliaCanvasWidth/2+i*200)/2);tickY=Math.round((juliaCanvasHeight/2+i*200)/2);jctx.beginPath();jctx.moveTo(originX-tickSize,tickY);jctx.lineTo(originX+tickSize,tickY);jctx.stroke();jctx.beginPath();jctx.moveTo(tickX,originY-tickSize);jctx.lineTo(tickX,originY+tickSize);jctx.stroke();jctx.strokeText(i,tickX-3,originY+12);jctx.strokeText(-i,originX+6,tickY+4);}}
 jctx.translate(-0.5,-0.5);}
-drawingJulia=0;juliaWorker.terminate();juliaWorker=null;juliaWorker=new Worker("julia-compute.js");juliaWorker.onmessage=onJuliaComputeEnded;}
+drawingJulia=0;}
 var onUltraComputeEnded=function(e)
 {if(!e.data.finished){if(blockSize[e.data.workerID]==1){percentDone[e.data.workerID]=Math.round(e.data.lineCount/(ultraHeight/workers)*100);var totalProgress=0;for(var j=0;j<workers;j++){totalProgress+=percentDone[j];}progress=Math.floor(totalProgress/workers);workingText.innerHTML="<i>"+progress+"%</i>";var lineStart=Math.floor(e.data.workerID*(canvasHeight/scaleFactor/workers));var lineEnd=Math.floor(e.data.workerID*(canvasHeight/scaleFactor/workers))+e.data.lineCount/(ultraHeight/canvasHeight)/scaleFactor;var lineLength=e.data.lineCount/(ultraHeight/canvasHeight)/scaleFactor;mctx.fillStyle="#FFFFFF";mctx.fillRect(0,lineStart,2,lineLength);mctx.fillRect(canvasWidth/scaleFactor-2,lineStart,2,lineLength);mctx.fillStyle="#000000";mctx.fillRect(0,lineEnd-2,2,2);mctx.fillRect(canvasWidth/scaleFactor-2,lineEnd-2,2,2);}
 return 1;}
@@ -113,8 +211,12 @@ pixelPos=(x+yOffset)<<2;pixels[pixelPos]=r;pixels[++pixelPos]=g;pixels[++pixelPo
 lstartLine=Math.floor(workerID*(ultraHeight/workers));ultraCanvasCtx.putImageData(multraSegment,0,lstartLine);workersRunning--;ultraSegment=null;if(workersRunning==0){ultraScaledCanvasCtx.drawImage(ultraCanvas,0,0,ultraWidth/2,ultraHeight/2);document.getElementById("poster").innerHTML="Poster";document.getElementById("save").disabled=false;document.getElementById("cycle").disabled=false;nextPalette.disabled=false;prevPalette.disabled=false;iterSlider.disabled=false;itersInput.disabled=false;juliaIterSlider.disabled=false;showAxesBox.disabled=false;showJuliaBox.disabled=false;lockJuliaColoursBox.disabled=false;smoothBox.disabled=false;jumpSelect.disabled=false;needRedraw=0;var now=new Date();var timeStamp=""+now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+"-"+pad(now.getHours())+pad(now.getMinutes())+pad(now.getSeconds());dLink=document.createElement('a');dLink.setAttribute('download',"mandel-"+timeStamp+".png");dLink.innerHTML="Poster created "+timeStamp+"<br><br>";var thePNG=ultraScaledCanvas.toDataURL("image/png");var byteString=atob(thePNG.split(',')[1]);var mimeString=thePNG.split(',')[0].split(':')[1].split(';')[0];var ab=new ArrayBuffer(byteString.length);var ia=new Uint8Array(ab);for(var i=0;i<byteString.length;i++){ia[i]=byteString.charCodeAt(i);}
 var theBlob=new Blob([ab],{type:mimeString});dLink.setAttribute('href',URL.createObjectURL(theBlob));posterDialogBody.appendChild(dLink);posterDialog.style.display="block";ultraScaledCanvas=null;ultraCanvas=null;startRender(0,0);}}
 function makePoster()
-{if(posterTime!=0){for(i=0;i<workers;i++){if(computeWorker[i]){computeWorker[i].terminate();computeWorker[i]=null;}
-workersRunning=0;}
+{if(posterTime!=0){workerPool.cancelAll();
+for(i=0;i<workers;i++){
+    computeWorkerRunning[i]=0;
+    renderWorkerRunning[i]=0;
+}
+workersRunning=0;
 document.getElementById("poster").innerHTML="Poster";document.getElementById("save").disabled=false;document.getElementById("cycle").disabled=false;nextPalette.disabled=false;prevPalette.disabled=false;iterSlider.disabled=false;itersInput.disabled=false;juliaIterSlider.disabled=false;showAxesBox.disabled=false;showJuliaBox.disabled=false;lockJuliaColoursBox.disabled=false;smoothBox.disabled=false;jumpSelect.disabled=false;workingText.innerHTML="";posterTime=0;startRender(0,0);return 1;}
 if(needRedraw)
 return 1;posterTime=performance.now();mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);needRedraw=1;document.getElementById("poster").innerHTML="Cancel";document.getElementById("save").disabled=true;document.getElementById("cycle").disabled=true;nextPalette.disabled=true;prevPalette.disabled=true;iterSlider.disabled=true;itersInput.disabled=true;juliaIterSlider.disabled=true;showAxesBox.disabled=true;showJuliaBox.disabled=true;lockJuliaColoursBox.disabled=true;smoothBox.disabled=true;jumpSelect.disabled=true;workingText.innerHTML="";workingText.style.visibility="visible";mc.style.borderColor="black";mc.style.outline="5px solid gray";logText.innerHTML="<i>Rendering poster...</i>";ultraCanvas=document.createElement('canvas');ultraCanvasCtx=ultraCanvas.getContext("2d",{alpha:false});ultraCanvas.width=ultraWidth;ultraCanvas.height=ultraHeight;ultraScaledCanvas=document.createElement('canvas');ultraScaledCanvasCtx=ultraScaledCanvas.getContext("2d",{alpha:false});ultraScaledCanvas.width=Math.floor(ultraWidth/2);ultraScaledCanvas.height=Math.floor(ultraHeight/2);var ultraMandel=new Array();var ultraSmoothMandel=new Array();var lscreenX=screenX*ultraWidth/canvasWidth;var lscreenY=screenY*ultraHeight/canvasHeight;var lzoom=zoom*ultraHeight/canvasHeight;for(var i=0;i<workers;i++){ultraMandel[i]=new Uint8Array(Math.floor(ultraWidth*ultraHeight/workers));}if(smooth==1){for(var i=0;i<workers;i++){ultraSmoothMandel[i]=new Uint8Array(Math.floor(ultraWidth*ultraHeight/workers));}}
@@ -207,16 +309,14 @@ itersToPrint="n/a";mandelText.textContent=itersToPrint;}
 var onComputeEnded=function(e)
 {if(!e.data.finished){if(blockSize[e.data.workerID]==1){percentDone[e.data.workerID]=Math.round(e.data.lineCount/(canvasHeight/workers)*100);var totalProgress=0;for(var j=0;j<workers;j++){totalProgress+=percentDone[j];}progress=Math.floor(totalProgress/workers);workingText.innerHTML="<i>"+progress+"%</i>";}
 return 1;}
-var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;mandel[workerID]=new Uint8Array(e.data.mandel);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);while(renderWorkerRunning[workerID]!=0){console.log("Waiting for worker to end");}
-if(!renderWorker[workerID]){renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;}
+var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;bufferPool.mandel[workerID]=new Uint8Array(e.data.mandel);bufferPool.smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);while(renderWorkerRunning[workerID]!=0){console.log("Waiting for worker to end");}
 renderWorkerRunning[workerID]=1;if(blockSize[workerID]==1)
-renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:smoothMandel[workerID].buffer},[mandel[workerID].buffer],[smoothMandel[workerID].buffer],[mdSegment[workerID].buffer]);else
-renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdCoarseSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,smooth:smooth,smoothMandel:smoothMandel[workerID]},[mandel[workerID].buffer],[mdCoarseSegment[workerID].buffer],[smoothMandel[workerID].buffer]);}
+workerPool.render[workerID].postMessage({colours:colours,mandel:bufferPool.mandel[workerID].buffer,canvasBuffer:bufferPool.pixels[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[workerID].buffer},[bufferPool.mandel[workerID].buffer],[bufferPool.smoothMandel[workerID].buffer],[bufferPool.pixels[workerID].buffer]);else
+workerPool.render[workerID].postMessage({colours:colours,mandel:bufferPool.mandel[workerID].buffer,canvasBuffer:bufferPool.coarsePixels[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[workerID]},[bufferPool.mandel[workerID].buffer],[bufferPool.coarsePixels[workerID].buffer],[bufferPool.smoothMandel[workerID].buffer]);}
 var onRenderEnded=function(e)
-{var workerID=e.data.workerID;mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);if(e.data.blockSize==1)
-mdSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);else
-mdCoarseSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);renderWorkerRunning[workerID]=0;workersRunning--;if(renderCount++>=20){renderCount=0;renderWorker[workerID].terminate();renderWorker[workerID]=null;renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;var zoomTmp=Math.floor(zoom);delete zoom;window.zoom=zoomTmp;}
-var lstartLine;if(e.data.blockSize==1){finished[workerID]=1;mSegment[workerID].data.set(mdSegment[workerID]);lstartLine=Math.floor(workerID*chunkHeight);offScreenCtx.putImageData(mSegment[workerID],0,lstartLine);}else{mCoarseSegment[workerID].data.set(mdCoarseSegment[workerID]);lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);mctx.drawImage(coarse,0,0);}
+{var workerID=e.data.workerID;bufferPool.mandel[workerID]=new Uint8Array(e.data.mandelBuffer);bufferPool.smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);if(e.data.blockSize==1)
+bufferPool.pixels[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);else
+bufferPool.coarsePixels[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);renderWorkerRunning[workerID]=0;workersRunning--;var lstartLine;if(e.data.blockSize==1){finished[workerID]=1;mSegment[workerID].data.set(bufferPool.pixels[workerID]);lstartLine=Math.floor(workerID*chunkHeight);offScreenCtx.putImageData(mSegment[workerID],0,lstartLine);}else{mCoarseSegment[workerID].data.set(bufferPool.coarsePixels[workerID]);lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);mctx.drawImage(coarse,0,0);}
 if(workersRunning==0){var allFinished=true;for(var i=0;i<workers;i++){if(!finished[i]){allFinished=false;break;}}if((!eventOccurred)&&(allFinished)){needRedraw=0;mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);if(!rotating){workingText.style.visibility="hidden";mc.style.borderColor="black";mc.style.outline="5px solid #FFFFFF";if(posterTime!=0){diff=Math.floor((performance.now()-posterTime)/10)/100;posterTime=0;logText.innerHTML="Poster rendered in "+diff+" s";}
 else{diff=Math.floor((performance.now()-start)/10)/100;logText.innerHTML="Rendered in "+diff+" s";if(typeof showInfoAfterRender==='function'){showInfoAfterRender(diff*1000);}}
 updateCoords(canvasWidth/2,canvasHeight/2,"centre");}
@@ -285,16 +385,18 @@ function touchEnd(event)
 {firstPinchDistance=0;mousePressed=0;oldMouseX=-1;oldMouseY=-1;}
 
 function updateCoords(x,y,source)
-{var xnorm=Math.floor((x-screenX)/zoom*1000000000)/1000000000;var ynorm=Math.floor((y-screenY)/zoom*1000000000)/1000000000;xmouse=xnorm;ymouse=ynorm;xPosText.value=''+xnorm;yPosText.value=''+-ynorm;coordSourceText.textContent=" "+source;coordSource2Text.textContent=" "+source;oneShotWorker.postMessage({oneShot:1,x:x,y:y,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,smooth:0});if((showJulia)&&(!drawingJulia))
+{var xnorm=Math.floor((x-screenX)/zoom*1000000000)/1000000000;var ynorm=Math.floor((y-screenY)/zoom*1000000000)/1000000000;xmouse=xnorm;ymouse=ynorm;xPosText.value=''+xnorm;yPosText.value=''+-ynorm;coordSourceText.textContent=" "+source;coordSource2Text.textContent=" "+source;workerPool.oneShot.postMessage({oneShot:1,x:x,y:y,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,smooth:0});if((showJulia)&&(!drawingJulia))
 startJulia(1,xnorm,ynorm);}
 function startJulia(compute,xnorm,ynorm)
 {if(drawingJulia)
-return 0;drawingJulia=1;if(compute){if(!juliaWorker){juliaWorker=new Worker("julia-compute.js");juliaWorker.onmessage=onJuliaComputeEnded;}
-juliaWorker.postMessage({juliaBuffer:julia.buffer,Cr:xnorm,Ci:ynorm,width:juliaCanvasWidth,height:juliaCanvasHeight,iterations:juliaIterations},[julia.buffer]);}
-else{if(!juliaRenderWorker){juliaRenderWorker=new Worker("julia-render.js");juliaRenderWorker.onmessage=onJuliaRenderEnded;}
-juliaRenderWorker.postMessage({colours:juliaColours,julia:julia.buffer,canvasBuffer:mdJulia.buffer,arrayWidth:juliaCanvasWidth,arrayHeight:juliaCanvasHeight},[julia.buffer],[mdJulia.buffer]);}}
+return 0;drawingJulia=1;if(compute){workerPool.julia.postMessage({juliaBuffer:bufferPool.juliaData.buffer,Cr:xnorm,Ci:ynorm,width:juliaCanvasWidth,height:juliaCanvasHeight,iterations:juliaIterations},[bufferPool.juliaData.buffer]);}
+else{workerPool.juliaRender.postMessage({colours:juliaColours,julia:bufferPool.juliaData.buffer,canvasBuffer:bufferPool.juliaPixels.buffer,arrayWidth:juliaCanvasWidth,arrayHeight:juliaCanvasHeight},[bufferPool.juliaData.buffer],[bufferPool.juliaPixels.buffer]);}}
 function setup()
-{setViewport();showAxesBox.checked=false;showJuliaBox.checked=true;lockJuliaColoursBox.checked=false;smoothBox.checked=true;juliaArea.style.display="none";juliaParamsArea.style.display="none";incrPalette();needRedraw=0;loadState();zoomText.textContent=Math.floor(zoom);oneShotWorker=new Worker("mandel-compute.js");oneShotWorker.onmessage=onOneShotComputeEnded;for(let i=0;i<workers;i++){for(let y=0;y<canvasHeight/workers;y++){for(let x=0;x<canvasWidth;x++){let pixelPos=(x+y*canvasWidth)*4;mdSegment[i][pixelPos+3]=255;}}
+{setViewport();showAxesBox.checked=false;showJuliaBox.checked=true;lockJuliaColoursBox.checked=false;smoothBox.checked=true;juliaArea.style.display="none";juliaParamsArea.style.display="none";incrPalette();needRedraw=0;loadState();zoomText.textContent=Math.floor(zoom);
+// Initialize worker pools and buffer pools
+workerPool.init();
+bufferPool.init();
+for(let i=0;i<workers;i++){for(let y=0;y<canvasHeight/workers;y++){for(let x=0;x<canvasWidth;x++){let pixelPos=(x+y*canvasWidth)*4;mdSegment[i][pixelPos+3]=255;}}
 for(let y=0;y<coarseHeight/workers;y++){for(let x=0;x<coarseWidth;x++){let pixelPos=(x+y*coarseWidth)*4;mdCoarseSegment[i][pixelPos+3]=255;}}}
 eventTime=performance.now();needRedraw=1;toggleJulia();toggleSmooth();startRender(1,1);}
 function startRender(lneedRecompute,blocky)
@@ -313,12 +415,10 @@ for(i=0;i<workers;i++)
 if((blockSize[i]>1)&&(performance.now()>zoomTime+500))
 needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((needToRun[i]==1)&&(!eventOccurred)){if(renderWorkerRunning[i]){continue;}
 if(computeWorkerRunning[i]){continue;}
-if(needRecompute){if(!computeWorker[i]){computeWorker[i]=new Worker("mandel-compute.js");computeWorker[i].onmessage=onComputeEnded;}
-workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
-computeWorker[i].postMessage({mandelBuffer:mandel[i].buffer,workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer]);else
-computeWorker[i].postMessage({mandelBuffer:mandel[i].buffer,workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer]);}
-else{workersRunning++;if(!renderWorker[i]){renderWorker[i]=new Worker("mandel-render.js");renderWorker[i].onmessage=onRenderEnded;}
-renderWorkerRunning[i]=1;renderWorker[i].postMessage({colours:colours,mandel:mandel[i].buffer,canvasBuffer:mdSegment[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer],[mdSegment[i].buffer]);}}}}
+if(needRecompute){workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
+workerPool.compute[i].postMessage({mandelBuffer:bufferPool.mandel[i].buffer,workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer},[bufferPool.mandel[i].buffer],[bufferPool.smoothMandel[i].buffer]);else
+workerPool.compute[i].postMessage({mandelBuffer:bufferPool.mandel[i].buffer,workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer},[bufferPool.mandel[i].buffer],[bufferPool.smoothMandel[i].buffer]);}
+else{workersRunning++;renderWorkerRunning[i]=1;workerPool.render[i].postMessage({colours:colours,mandel:bufferPool.mandel[i].buffer,canvasBuffer:bufferPool.pixels[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer},[bufferPool.mandel[i].buffer],[bufferPool.smoothMandel[i].buffer],[bufferPool.pixels[i].buffer]);}}}}
 if((workersRunning==0)&&(rotating==1))
 rotatePalette(-1);else
 requestAnimationFrame(drawMandel);}
