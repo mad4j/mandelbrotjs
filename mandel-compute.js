@@ -44,4 +44,4 @@ lineCounter++;if((blockSize==1)&&(lineCounter==20)){
 if(!isRunning || currentJobId !== jobId) {
     return;
 }
-self.postMessage({finished:1,mandel:mandelData.buffer,workerID:workerID,smooth:smooth,smoothMandel:smoothMandel.buffer},[mandelData.buffer],[smoothMandel.buffer]);};
+self.postMessage({finished:1,mandel:mandelData.buffer,workerID:workerID,smooth:smooth,smoothMandel:smoothMandel.buffer});};

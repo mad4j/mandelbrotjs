@@ -36,4 +36,4 @@ for(let j=0;j<lblockSize;j++){let yOffset=(y+j)*arrayWidth;for(let i=0;i<lblockS
 if(!isRunning || currentJobId !== jobId) {
     return;
 }
-colours=null;self.postMessage({mandelBuffer:mandel.buffer,pixelsBuffer:pixels.buffer,smoothMandel:smoothMandel.buffer,workerID:workerID,blockSize:blockSize},[mandel.buffer],[pixels.buffer],[smoothMandel.buffer]);pixels=null;mandel=null;};
+colours=null;self.postMessage({mandelBuffer:mandel.buffer,pixelsBuffer:pixels.buffer,smoothMandel:smoothMandel.buffer,workerID:workerID,blockSize:blockSize});pixels=null;mandel=null;};

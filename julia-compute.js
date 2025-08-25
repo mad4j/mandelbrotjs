@@ -35,4 +35,4 @@ iteration=iteration%255;fractalData[x+y*width]=iteration;}}
 if(!isRunning || currentJobId !== jobId) {
     return;
 }
-self.postMessage({finished:1,julia:fractalData.buffer},[fractalData.buffer]);};
+self.postMessage({finished:1,julia:fractalData.buffer});};

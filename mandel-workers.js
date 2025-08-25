@@ -194,7 +194,7 @@ tickSize=3;tickX=Math.round((screenX+i*zoom)/scaleFactor);tickY=Math.round((scre
 continue;mctx.beginPath();mctx.moveTo(tickX,originY-tickSize);mctx.lineTo(tickX,originY+tickSize);mctx.stroke();mctx.strokeText(-Math.round(i*10000)/10000,originX+6,tickY+4);}}
 mctx.translate(-0.5,-0.5);}
 var onJuliaComputeEnded=function(e)
-{bufferPool.juliaData=new Uint8Array(e.data.julia);workerPool.juliaRender.postMessage({colours:juliaColours,julia:bufferPool.juliaData.buffer,canvasBuffer:bufferPool.juliaPixels.buffer,arrayWidth:juliaCanvasWidth,arrayHeight:juliaCanvasHeight},[bufferPool.juliaData.buffer],[bufferPool.juliaPixels.buffer]);}
+{bufferPool.juliaData=new Uint8Array(e.data.julia);workerPool.juliaRender.postMessage({colours:juliaColours,julia:bufferPool.juliaData.buffer,canvasBuffer:bufferPool.juliaPixels.buffer,arrayWidth:juliaCanvasWidth,arrayHeight:juliaCanvasHeight});}
 var onJuliaRenderEnded=function(e)
 {bufferPool.juliaData=new Uint8Array(e.data.juliaBuffer);bufferPool.juliaPixels=new Uint8ClampedArray(e.data.pixelsBuffer);mJulia.data.set(bufferPool.juliaPixels);juliaOffScreenCtx.putImageData(mJulia,0,0);jctx.drawImage(juliaOffScreen,0,0,juliaCanvasWidth/2,juliaCanvasHeight/2);var x=xmouse*juliaCanvasWidth/8+juliaCanvasWidth/4;var y=ymouse*juliaCanvasHeight/6+juliaCanvasHeight/4;jctx.strokeStyle="#FFFFFF";jctx.lineWidth=2.0;jctx.beginPath();jctx.moveTo(x-5,y);jctx.lineTo(x+5,y);jctx.stroke();jctx.beginPath();jctx.moveTo(x,y-5);jctx.lineTo(x,y+5);jctx.stroke();if(showAxes){var originX=Math.round(juliaCanvasWidth/4);var originY=Math.round(juliaCanvasHeight/4);jctx.translate(0.5,0.5);jctx.strokeStyle="#DDDDDD";jctx.font="10px Sans-serif";jctx.lineWidth=1.0;jctx.beginPath();jctx.moveTo(0,originY);jctx.lineTo(juliaCanvasWidth/2,originY);jctx.stroke();jctx.beginPath();jctx.moveTo(originX,0);jctx.lineTo(originX,juliaCanvasHeight/2);jctx.stroke();jctx.beginPath();jctx.arc(originX,originY,5,0,2*Math.PI);jctx.stroke();var step=0.5;for(i=-3;i<=3;i+=step){if(i!=0){if(i%1.0==0)
 tickSize=4;else
@@ -311,8 +311,8 @@ var onComputeEnded=function(e)
 return 1;}
 var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;bufferPool.mandel[workerID]=new Uint8Array(e.data.mandel);bufferPool.smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);while(renderWorkerRunning[workerID]!=0){console.log("Waiting for worker to end");}
 renderWorkerRunning[workerID]=1;if(blockSize[workerID]==1)
-workerPool.render[workerID].postMessage({colours:colours,mandel:bufferPool.mandel[workerID].buffer,canvasBuffer:bufferPool.pixels[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[workerID].buffer},[bufferPool.mandel[workerID].buffer],[bufferPool.smoothMandel[workerID].buffer],[bufferPool.pixels[workerID].buffer]);else
-workerPool.render[workerID].postMessage({colours:colours,mandel:bufferPool.mandel[workerID].buffer,canvasBuffer:bufferPool.coarsePixels[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[workerID]},[bufferPool.mandel[workerID].buffer],[bufferPool.coarsePixels[workerID].buffer],[bufferPool.smoothMandel[workerID].buffer]);}
+workerPool.render[workerID].postMessage({colours:colours,mandel:bufferPool.mandel[workerID].buffer,canvasBuffer:bufferPool.pixels[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[workerID].buffer});else
+workerPool.render[workerID].postMessage({colours:colours,mandel:bufferPool.mandel[workerID].buffer,canvasBuffer:bufferPool.coarsePixels[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[workerID]});}
 var onRenderEnded=function(e)
 {var workerID=e.data.workerID;bufferPool.mandel[workerID]=new Uint8Array(e.data.mandelBuffer);bufferPool.smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);if(e.data.blockSize==1)
 bufferPool.pixels[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);else
@@ -389,8 +389,8 @@ function updateCoords(x,y,source)
 startJulia(1,xnorm,ynorm);}
 function startJulia(compute,xnorm,ynorm)
 {if(drawingJulia)
-return 0;drawingJulia=1;if(compute){workerPool.julia.postMessage({juliaBuffer:bufferPool.juliaData.buffer,Cr:xnorm,Ci:ynorm,width:juliaCanvasWidth,height:juliaCanvasHeight,iterations:juliaIterations},[bufferPool.juliaData.buffer]);}
-else{workerPool.juliaRender.postMessage({colours:juliaColours,julia:bufferPool.juliaData.buffer,canvasBuffer:bufferPool.juliaPixels.buffer,arrayWidth:juliaCanvasWidth,arrayHeight:juliaCanvasHeight},[bufferPool.juliaData.buffer],[bufferPool.juliaPixels.buffer]);}}
+return 0;drawingJulia=1;if(compute){workerPool.julia.postMessage({juliaBuffer:bufferPool.juliaData.buffer,Cr:xnorm,Ci:ynorm,width:juliaCanvasWidth,height:juliaCanvasHeight,iterations:juliaIterations});}
+else{workerPool.juliaRender.postMessage({colours:juliaColours,julia:bufferPool.juliaData.buffer,canvasBuffer:bufferPool.juliaPixels.buffer,arrayWidth:juliaCanvasWidth,arrayHeight:juliaCanvasHeight});}}
 function setup()
 {setViewport();showAxesBox.checked=false;showJuliaBox.checked=true;lockJuliaColoursBox.checked=false;smoothBox.checked=true;juliaArea.style.display="none";juliaParamsArea.style.display="none";incrPalette();needRedraw=0;loadState();zoomText.textContent=Math.floor(zoom);
 // Initialize worker pools and buffer pools
@@ -416,9 +416,9 @@ if((blockSize[i]>1)&&(performance.now()>zoomTime+500))
 needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((needToRun[i]==1)&&(!eventOccurred)){if(renderWorkerRunning[i]){continue;}
 if(computeWorkerRunning[i]){continue;}
 if(needRecompute){workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
-workerPool.compute[i].postMessage({mandelBuffer:bufferPool.mandel[i].buffer,workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer},[bufferPool.mandel[i].buffer],[bufferPool.smoothMandel[i].buffer]);else
-workerPool.compute[i].postMessage({mandelBuffer:bufferPool.mandel[i].buffer,workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer},[bufferPool.mandel[i].buffer],[bufferPool.smoothMandel[i].buffer]);}
-else{workersRunning++;renderWorkerRunning[i]=1;workerPool.render[i].postMessage({colours:colours,mandel:bufferPool.mandel[i].buffer,canvasBuffer:bufferPool.pixels[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer},[bufferPool.mandel[i].buffer],[bufferPool.smoothMandel[i].buffer],[bufferPool.pixels[i].buffer]);}}}}
+workerPool.compute[i].postMessage({mandelBuffer:bufferPool.mandel[i].buffer,workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer});else
+workerPool.compute[i].postMessage({mandelBuffer:bufferPool.mandel[i].buffer,workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer});}
+else{workersRunning++;renderWorkerRunning[i]=1;workerPool.render[i].postMessage({colours:colours,mandel:bufferPool.mandel[i].buffer,canvasBuffer:bufferPool.pixels[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,smooth:smooth,smoothMandel:bufferPool.smoothMandel[i].buffer});}}}}
 if((workersRunning==0)&&(rotating==1))
 rotatePalette(-1);else
 requestAnimationFrame(drawMandel);}

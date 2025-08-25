@@ -32,4 +32,4 @@ pixelPos=(x+yOffset)<<2;pixels[pixelPos]=r;pixels[++pixelPos]=g;pixels[++pixelPo
 if(!isRunning || currentJobId !== jobId) {
     return;
 }
-colours=null;self.postMessage({juliaBuffer:julia.buffer,pixelsBuffer:pixels.buffer},[julia.buffer],[pixels.buffer]);pixels=null;julia=null;};
+colours=null;self.postMessage({juliaBuffer:julia.buffer,pixelsBuffer:pixels.buffer});pixels=null;julia=null;};
