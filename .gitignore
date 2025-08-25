@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build artifacts (but keep final compiled pkg)
+wasm/target/
+wasm/pkg/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+/tmp/
