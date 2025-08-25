@@ -115,7 +115,6 @@
 	<canvas id="mandelCanvas" onwheel="wheelMoved(event);">Sorry, your browser does not have HTML canvas support.</canvas>
 	
 	<!-- Hidden elements to prevent errors in mandel-workers.js -->
-	<canvas id="juliaCanvas" style="display: none;" width="1" height="1"></canvas>
 	<div id="logText" style="display: none;"></div>
 	<div id="workingText" style="display: none;"></div>
 	<div id="zoomText" style="display: none;"></div>
@@ -145,21 +144,12 @@
 	<div id="showFractalsBtn" style="display: none;"></div>
 	<select id="jumpTo" style="display: none;"><option value="choose">Jump To...</option></select>
 	<input type="checkbox" id="showAxes" style="display: none;">
-	<input type="checkbox" id="showJulia" style="display: none;">
-	<input type="checkbox" id="lockJuliaColours" style="display: none;">
 	<input type="checkbox" id="smooth" style="display: none;">
-	<div id="juliaParamsArea" style="display: none;"></div>
-	<div id="juliaArea" style="display: none;"></div>
-	<div id="juliaSwitchArea" style="display: none;"></div>
-	<input id="juliaIterSlider" type="range" style="display: none;" value="50">
-	<div id="juliaItersText" style="display: none;"></div>
 
 <script src="mandel-workers.js"></script>
 <script>
 	// Stub functions for missing UI elements to prevent errors
 	function changeIters() {}
-	function toggleLockJuliaColours() {}
-	function toggleJulia() { showJulia = 0; }
 	function toggleAxes() { showAxes = 0; }
 	function toggleSmooth() { smooth = 1; }
 	function showAboutBox() {}
@@ -185,7 +175,6 @@
 	if (typeof viewportTag === 'undefined' || !viewportTag) viewportTag = { setAttribute: () => {} };
 
 	// Disable Julia set display
-	showJulia = 0;
 	showAxes = 0;
 	smooth = 1;
 
