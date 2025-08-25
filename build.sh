@@ -34,6 +34,12 @@ echo "📋 Copying WASM package to root directory..."
 cd ..
 cp -r wasm/pkg .
 
+# Remove the .gitignore file created by wasm-pack so files can be committed
+if [ -f "pkg/.gitignore" ]; then
+    rm pkg/.gitignore
+    echo "🗑️  Removed pkg/.gitignore to allow git tracking"
+fi
+
 echo "✅ Build complete! WebAssembly module is ready."
 echo ""
 echo "📂 Generated files:"
