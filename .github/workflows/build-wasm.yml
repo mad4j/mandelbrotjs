@@ -1,0 +1,69 @@
+name: Build and Commit WASM
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'wasm/**'
+      - 'build.sh'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'wasm/**'
+      - 'build.sh'
+  workflow_dispatch:
+
+jobs:
+  build-wasm:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+        
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          wasm/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: Install wasm-pack
+      run: |
+        curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        
+    - name: Build WebAssembly module
+      run: |
+        chmod +x ./build.sh
+        ./build.sh
+        
+    - name: Check for changes in pkg directory
+      id: check_changes
+      run: |
+        if [ -n "$(git status --porcelain pkg/)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+          echo "WASM files have been updated"
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "No changes to WASM files"
+        fi
+        
+    - name: Commit and push WASM files
+      if: steps.check_changes.outputs.changes == 'true' && github.event_name == 'push'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add pkg/
+        git commit -m "Update WASM binaries [skip ci]" || exit 0
+        git push
