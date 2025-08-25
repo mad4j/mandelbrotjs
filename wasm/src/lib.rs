@@ -7,6 +7,61 @@ extern "C" {
     fn log(s: &str);
 }
 
+#[inline(always)]
+fn mandel_point_optimized(x_norm: f64, y_norm: f64, iter_max: i32, escape_squared: f64) -> i32 {
+    // Improved early bailout checks for main cardioid and period-2 bulb
+    // Main cardioid check: (x+1)^2 + y^2 < 1/16
+    let main_cardioid_check = {
+        let x_plus_1 = x_norm + 1.0;
+        x_plus_1 * x_plus_1 + y_norm * y_norm < 0.0625
+    };
+    
+    // Period-2 bulb check: x^2 + y^2 < 0.25 and x > -0.75  
+    let period2_bulb_check = {
+        let dist_sq = x_norm * x_norm + y_norm * y_norm;
+        dist_sq < 0.25 && x_norm > -0.75
+    };
+    
+    if main_cardioid_check || period2_bulb_check {
+        return iter_max;
+    }
+    
+    // Quick escape check for points far from the set
+    let quick_escape_dist = x_norm * x_norm + y_norm * y_norm;
+    if quick_escape_dist > 4.0 {
+        return 0;
+    }
+    
+    let mut zr = 0.0f64;
+    let mut zi = 0.0f64;
+    let mut iteration = 0;
+    
+    // Optimized iteration loop
+    while iteration < iter_max {
+        let zr_sq = zr * zr;
+        let zi_sq = zi * zi;
+        
+        if zr_sq + zi_sq >= escape_squared {
+            break;
+        }
+        
+        let zr_new = zr_sq - zi_sq + x_norm;
+        zi = 2.0 * zr * zi + y_norm;
+        zr = zr_new;
+        iteration += 1;
+        
+        // Periodic check to avoid unnecessary computation  
+        if iteration % 8 == 0 {
+            let magnitude_sq = zr * zr + zi * zi;
+            if magnitude_sq >= escape_squared {
+                break;
+            }
+        }
+    }
+    
+    iteration
+}
+
 #[wasm_bindgen]
 pub struct MandelComputeResult {
     iterations: i32,
@@ -35,13 +90,13 @@ pub struct MandelSegmentResult {
 #[wasm_bindgen]
 impl MandelSegmentResult {
     #[wasm_bindgen(getter)]
-    pub fn mandel_data(&self) -> Vec<u8> {
-        self.mandel_data.clone()
+    pub fn mandel_data(&self) -> Box<[u8]> {
+        self.mandel_data.clone().into_boxed_slice()
     }
 
     #[wasm_bindgen(getter)]
-    pub fn smooth_data(&self) -> Vec<u8> {
-        self.smooth_data.clone()
+    pub fn smooth_data(&self) -> Box<[u8]> {
+        self.smooth_data.clone().into_boxed_slice()
     }
 }
 
@@ -53,33 +108,7 @@ pub fn mandel_one_shot(
     smooth: bool,
 ) -> MandelComputeResult {
     let escape_squared = if smooth { 256.0 } else { 4.0 };
-    let first_iteration = if smooth { -3 } else { -1 };
-    
-    let mut iteration = first_iteration;
-    
-    // Early bailout for points obviously outside the set
-    if (x_norm > -0.5) && (x_norm < 0.25) && (y_norm > -0.5) && (y_norm < 0.5) {
-        iteration = iter_max;
-    } else {
-        let mut zr = 0.0;
-        let mut zi = 0.0;
-        let mut zr_squared;
-        let mut zi_squared;
-        
-        loop {
-            zr_squared = zr * zr;
-            zi_squared = zi * zi;
-            
-            if zr_squared + zi_squared >= escape_squared || iteration >= iter_max {
-                break;
-            }
-            
-            let zr_prev = zr;
-            zr = zr_squared - zi_squared + x_norm;
-            zi = (zr_prev * 2.0) * zi + y_norm;
-            iteration += 1;
-        }
-    }
+    let iteration = mandel_point_optimized(x_norm, y_norm, iter_max, escape_squared);
     
     MandelComputeResult {
         iterations: iteration,
@@ -100,7 +129,6 @@ pub fn mandel_compute_segment(
     block_size: i32,
 ) -> Vec<u8> {
     let escape_squared = if smooth { 256.0 } else { 4.0 };
-    let first_iteration = if smooth { -3 } else { -1 };
     let l_block_size = if block_size == 1 { 1 } else { block_size / 2 };
     
     let mut mandel_data = vec![0u8; (canvas_width * segment_height) as usize];
@@ -112,29 +140,7 @@ pub fn mandel_compute_segment(
         
         while x < canvas_width {
             let x_norm = (x as f64 - screen_x) / zoom;
-            let mut iteration = first_iteration;
-            
-            // Early bailout for points obviously inside the main cardioid and bulb
-            if (x_norm > -0.5) && (x_norm < 0.25) && (y_norm > -0.5) && (y_norm < 0.5) {
-                iteration = iter_max;
-            } else {
-                let mut zr = 0.0;
-                let mut zi = 0.0;
-                
-                loop {
-                    let zr_squared = zr * zr;
-                    let zi_squared = zi * zi;
-                    
-                    if zr_squared + zi_squared >= escape_squared || iteration >= iter_max {
-                        break;
-                    }
-                    
-                    let zr_prev = zr;
-                    zr = zr_squared - zi_squared + x_norm;
-                    zi = (zr_prev * 2.0) * zi + y_norm;
-                    iteration += 1;
-                }
-            }
+            let iteration = mandel_point_optimized(x_norm, y_norm, iter_max, escape_squared);
             
             let result_iteration = if iteration == iter_max {
                 255
@@ -142,16 +148,15 @@ pub fn mandel_compute_segment(
                 (iteration % 255) as u8
             };
             
-            // Fill block
-            for j in 0..l_block_size {
-                if y + j >= segment_height { break; }
-                let y_offset = ((y + j) * canvas_width) as usize;
-                for i in 0..l_block_size {
-                    if x + i >= canvas_width { break; }
-                    let index = y_offset + (x + i) as usize;
-                    if index < mandel_data.len() {
-                        mandel_data[index] = result_iteration;
-                    }
+            // Fill block efficiently
+            let y_end = std::cmp::min(y + l_block_size, segment_height);
+            let x_end = std::cmp::min(x + l_block_size, canvas_width);
+            
+            for j in y..y_end {
+                let y_offset = (j * canvas_width) as usize;
+                for i in x..x_end {
+                    let index = y_offset + i as usize;
+                    mandel_data[index] = result_iteration;
                 }
             }
             
@@ -161,6 +166,56 @@ pub fn mandel_compute_segment(
     }
     
     mandel_data
+}
+
+#[inline(always)]
+fn mandel_point_with_smooth(x_norm: f64, y_norm: f64, iter_max: i32) -> (i32, f64) {
+    let escape_squared = 256.0f64;
+    
+    // Improved early bailout checks
+    let main_cardioid_check = {
+        let x_plus_1 = x_norm + 1.0;
+        x_plus_1 * x_plus_1 + y_norm * y_norm < 0.0625
+    };
+    
+    let period2_bulb_check = {
+        let dist_sq = x_norm * x_norm + y_norm * y_norm;
+        dist_sq < 0.25 && x_norm > -0.75
+    };
+    
+    if main_cardioid_check || period2_bulb_check {
+        return (iter_max, 0.0);
+    }
+    
+    // Quick escape check
+    let quick_escape_dist = x_norm * x_norm + y_norm * y_norm;
+    if quick_escape_dist > 4.0 {
+        return (0, 0.0);
+    }
+    
+    let mut zr = 0.0f64;
+    let mut zi = 0.0f64;
+    let mut iteration = 0;
+    
+    while iteration < iter_max {
+        let zr_sq = zr * zr;
+        let zi_sq = zi * zi;
+        
+        if zr_sq + zi_sq >= escape_squared {
+            // Calculate smooth value
+            let radius_sqrt = (zr_sq + zi_sq).sqrt();
+            let log2 = 2.0f64.ln();
+            let smooth_offset = ((radius_sqrt.ln() / log2).ln() / log2 - 2.0) * 255.0;
+            return (iteration, smooth_offset.max(0.0).min(255.0));
+        }
+        
+        let zr_new = zr_sq - zi_sq + x_norm;
+        zi = 2.0 * zr * zi + y_norm;
+        zr = zr_new;
+        iteration += 1;
+    }
+    
+    (iter_max, 0.0)
 }
 
 #[wasm_bindgen]
@@ -174,10 +229,7 @@ pub fn mandel_compute_segment_with_smooth(
     iter_max: i32,
     block_size: i32,
 ) -> MandelSegmentResult {
-    let escape_squared = 256.0;
-    let first_iteration = -3;
     let l_block_size = if block_size == 1 { 1 } else { block_size / 2 };
-    let log2 = 2.0_f64.ln();
     
     let mut mandel_data = vec![0u8; (canvas_width * segment_height) as usize];
     let mut smooth_mandel = vec![0u8; (canvas_width * segment_height) as usize];
@@ -189,37 +241,7 @@ pub fn mandel_compute_segment_with_smooth(
         
         while x < canvas_width {
             let x_norm = (x as f64 - screen_x) / zoom;
-            let mut iteration = first_iteration;
-            let mut zr = 0.0;
-            let mut zi = 0.0;
-            let mut zr_squared = 0.0;
-            let mut zi_squared = 0.0;
-            
-            // Early bailout for points obviously inside the main cardioid and bulb
-            if (x_norm > -0.5) && (x_norm < 0.25) && (y_norm > -0.5) && (y_norm < 0.5) {
-                iteration = iter_max;
-            } else {
-                loop {
-                    zr_squared = zr * zr;
-                    zi_squared = zi * zi;
-                    
-                    if zr_squared + zi_squared >= escape_squared || iteration >= iter_max {
-                        break;
-                    }
-                    
-                    let zr_prev = zr;
-                    zr = zr_squared - zi_squared + x_norm;
-                    zi = (zr_prev * 2.0) * zi + y_norm;
-                    iteration += 1;
-                }
-            }
-            
-            let smooth_offset = if iteration < iter_max {
-                let radius_sqrt = (zr_squared + zi_squared).sqrt();
-                ((radius_sqrt.ln() / log2).ln() / log2 - 2.0) * 255.0
-            } else {
-                0.0
-            };
+            let (iteration, smooth_offset) = mandel_point_with_smooth(x_norm, y_norm, iter_max);
             
             let result_iteration = if iteration == iter_max {
                 255
@@ -227,19 +249,18 @@ pub fn mandel_compute_segment_with_smooth(
                 (iteration % 255) as u8
             };
             
-            let smooth_offset_u8 = smooth_offset.floor().max(0.0).min(255.0) as u8;
+            let smooth_offset_u8 = smooth_offset as u8;
             
-            // Fill block
-            for j in 0..l_block_size {
-                if y + j >= segment_height { break; }
-                let y_offset = ((y + j) * canvas_width) as usize;
-                for i in 0..l_block_size {
-                    if x + i >= canvas_width { break; }
-                    let index = y_offset + (x + i) as usize;
-                    if index < mandel_data.len() {
-                        mandel_data[index] = result_iteration;
-                        smooth_mandel[index] = smooth_offset_u8;
-                    }
+            // Fill block efficiently
+            let y_end = std::cmp::min(y + l_block_size, segment_height);
+            let x_end = std::cmp::min(x + l_block_size, canvas_width);
+            
+            for j in y..y_end {
+                let y_offset = (j * canvas_width) as usize;
+                for i in x..x_end {
+                    let index = y_offset + i as usize;
+                    mandel_data[index] = result_iteration;
+                    smooth_mandel[index] = smooth_offset_u8;
                 }
             }
             

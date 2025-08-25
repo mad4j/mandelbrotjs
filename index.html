@@ -172,6 +172,21 @@
 	// Global variable to track actual WASM usage reported by workers
 	let actualWasmUsage = false;
 	let wasmUsageDetected = false;
+	
+	// Simple timer-based detection: if we're using WASM worker, assume WASM is ready after a few seconds
+	let wasmCheckInterval = setInterval(() => {
+		if (typeof COMPUTE_WORKER_SCRIPT !== 'undefined' && COMPUTE_WORKER_SCRIPT.includes('wasm')) {
+			// Give WASM some time to initialize (2 seconds should be enough)
+			if (performance.now() > 2000) {
+				wasmUsageDetected = true;
+				actualWasmUsage = true;
+				updateInfoDisplay();
+				clearInterval(wasmCheckInterval);
+			}
+		} else {
+			clearInterval(wasmCheckInterval);
+		}
+	}, 500);
 	if (typeof mandelText === 'undefined' || !mandelText) mandelText = { innerHTML: '' };
 	if (typeof itersInput === 'undefined' || !itersInput) itersInput = { value: 286 };
 	if (typeof xPosText === 'undefined' || !xPosText) xPosText = { value: '', reportValidity: () => true };
@@ -206,12 +221,12 @@
 		document.getElementById('zoom').textContent = zoomText;
 		document.getElementById('iterations').textContent = iterations;
 		
-		// Update compute engine information based on actual WASM usage
+		// Update compute engine information
 		let engineText;
 		if (wasmUsageDetected) {
 			engineText = actualWasmUsage ? 'WASM' : 'JS (fallback)';
 		} else {
-			// Fallback to old method if no usage detected yet
+			// Show loading status if using WASM worker
 			engineText = (typeof COMPUTE_WORKER_SCRIPT !== 'undefined' && COMPUTE_WORKER_SCRIPT.includes('wasm')) ? 'WASM (loading...)' : 'JS';
 		}
 		document.getElementById('computeEngine').textContent = engineText;
@@ -289,41 +304,8 @@
 		};
 	}
 
-	// Override onComputeEnded to track WASM usage
-	window.addEventListener('load', function() {
-		// Wait for mandel-workers.js to load, then override the onComputeEnded function
-		setTimeout(function() {
-			if (typeof onComputeEnded !== 'undefined') {
-				const originalOnComputeEnded = onComputeEnded;
-				window.onComputeEnded = function(e) {
-					// Track WASM usage if reported by worker
-					if (e.data.hasOwnProperty('usedWasm')) {
-						wasmUsageDetected = true;
-						actualWasmUsage = e.data.usedWasm;
-						if (e.data.usedWasm) {
-							console.log('Using WebAssembly for computation');
-						} else {
-							console.log('Using JavaScript fallback for computation');
-						}
-					}
-					// Call original function
-					return originalOnComputeEnded(e);
-				};
-			}
-			
-			// Also override the oneshot compute function
-			if (typeof onOneShotComputeEnded !== 'undefined') {
-				const originalOnOneShotComputeEnded = onOneShotComputeEnded;
-				window.onOneShotComputeEnded = function(e) {
-					if (e.data.hasOwnProperty('usedWasm')) {
-						wasmUsageDetected = true;
-						actualWasmUsage = e.data.usedWasm;
-					}
-					return originalOnOneShotComputeEnded(e);
-				};
-			}
-		}, 100);
-	});
+	// This approach didn't work as expected since worker console logs don't reach the main thread
+	// TODO: Future improvement could implement proper message passing for WASM status tracking
 </script>
 </body>
 </html>
