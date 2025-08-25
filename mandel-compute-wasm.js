@@ -161,7 +161,7 @@ function wasmMandelCompute(e) {
         
         try {
             const result = wasmModule.mandel_one_shot(xnorm, ynorm, iter_max, smooth);
-            const oneShotResult = result.iterations();
+            const oneShotResult = result.iterations;
             self.postMessage({ oneShotResult: oneShotResult, usedWasm: true });
             return;
         } catch (error) {
@@ -187,8 +187,8 @@ function wasmMandelCompute(e) {
                 startLine, segmentHeight, canvasWidth,
                 screenX, screenY, zoom, iter_max, blockSize
             );
-            mandelData = new Uint8Array(result.mandel_data());
-            smoothMandel = new Uint8Array(result.smooth_data());
+            mandelData = new Uint8Array(result.mandel_data);
+            smoothMandel = new Uint8Array(result.smooth_data);
         } else {
             const resultData = wasmModule.mandel_compute_segment(
                 startLine, segmentHeight, canvasWidth,

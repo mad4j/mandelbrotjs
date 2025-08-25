@@ -1,15 +1,11 @@
 {
   "name": "mandel-wasm",
-  "type": "module",
   "version": "0.1.0",
   "files": [
     "mandel_wasm_bg.wasm",
     "mandel_wasm.js",
     "mandel_wasm.d.ts"
   ],
-  "main": "mandel_wasm.js",
-  "types": "mandel_wasm.d.ts",
-  "sideEffects": [
-    "./snippets/*"
-  ]
+  "browser": "mandel_wasm.js",
+  "types": "mandel_wasm.d.ts"
 }
