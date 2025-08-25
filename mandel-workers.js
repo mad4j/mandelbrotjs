@@ -228,10 +228,18 @@ var onRenderEnded=function(e)
 {var workerID=e.data.workerID;mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
 // Handle ImageBitmap response when OffscreenCanvas is used
 if(e.data.useOffscreenCanvas && e.data.imageBitmap){
-    // Use drawImage directly with ImageBitmap - much faster than putImageData
-    var lstartLine=Math.floor(workerID*chunkHeight);
-    offScreenCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
-    finished[workerID]=1;
+    // Handle both fine and coarse rendering correctly
+    if(e.data.blockSize==1){
+        // Fine rendering - draw to offScreen canvas
+        var lstartLine=Math.floor(workerID*chunkHeight);
+        offScreenCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
+        finished[workerID]=1;
+    } else {
+        // Coarse rendering - draw to coarse canvas
+        var lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);
+        coarseCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
+        mctx.drawImage(coarse,0,0);
+    }
 } else {
     // Fallback to original pixel array approach
     if(e.data.blockSize==1)
