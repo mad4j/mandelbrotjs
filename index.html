@@ -180,10 +180,10 @@
 		canvas.style.width = size + 'px';
 		canvas.style.height = size + 'px';
 		
-		// Set internal size to match mandel-workers.js expectations but with square aspect ratio
-		// Use coarseWidth (600) for both dimensions to maintain square aspect
-		canvas.width = 600;  // coarseWidth from mandel-workers.js (now square)
-		canvas.height = 600; // Make it square
+		// Set internal size to match mandel-workers.js expectations
+		// Use full resolution: canvasWidth=600*2=1200, canvasHeight=600*2=1200
+		canvas.width = 1200;  // canvasWidth from mandel-workers.js
+		canvas.height = 1200; // canvasHeight from mandel-workers.js
 	}
 
 	// Update info display
@@ -201,6 +201,33 @@
 		const workerCount = typeof workers !== 'undefined' ? workers : 4;
 		document.getElementById('renderTime').textContent = timeText + ' (' + workerCount + ' cores)';
 		showInfo();
+	}
+
+	// Force completion check for cases where rendering gets stuck
+	function forceCompletionCheck() {
+		if (typeof workersRunning !== 'undefined' && workersRunning === 0) {
+			// Check if we're stuck in coarse rendering mode
+			let allCoarse = true;
+			if (typeof blockSize !== 'undefined') {
+				for (let i = 0; i < blockSize.length; i++) {
+					if (blockSize[i] === 1) {
+						allCoarse = false;
+						break;
+					}
+				}
+			}
+			
+			// If stuck in coarse mode, trigger fine rendering
+			if (allCoarse && typeof startRender === 'function') {
+				// Force fine rendering by setting blockSize to 1
+				if (typeof blockSize !== 'undefined') {
+					for (let i = 0; i < blockSize.length; i++) {
+						blockSize[i] = 1;
+					}
+				}
+				startRender(1, 0); // needRecompute=1, blocky=0 for fine rendering
+			}
+		}
 	}
 
 	// Hide info panel (called when zoom/movement starts)
@@ -249,6 +276,32 @@
 	// Trigger initial render
 	if (typeof startRender === 'function') {
 		startRender(1, 1);
+		
+		// Set up completion check to handle cases where rendering gets stuck
+		setTimeout(() => {
+			forceCompletionCheck();
+			// Repeat check periodically until completion
+			const checkInterval = setInterval(() => {
+				if (typeof workersRunning !== 'undefined' && workersRunning === 0 && 
+					typeof finished !== 'undefined') {
+					let allFinished = true;
+					for (let i = 0; i < finished.length; i++) {
+						if (!finished[i]) {
+							allFinished = false;
+							break;
+						}
+					}
+					if (allFinished) {
+						clearInterval(checkInterval);
+					} else {
+						forceCompletionCheck();
+					}
+				}
+			}, 2000);
+			
+			// Clear interval after reasonable time to avoid infinite checking
+			setTimeout(() => clearInterval(checkInterval), 30000);
+		}, 3000);
 	}
 
 	// Override the original updateCoords to update our info display
