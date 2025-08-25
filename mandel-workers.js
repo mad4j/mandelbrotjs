@@ -179,6 +179,7 @@ for(i=0;i<255;i++)
 juliaColours[i]=colours[i];startRender(0,0);}
 document.body.onmousedown=function(e)
 {mousePressed=1;eventTime=performance.now();}
+document.body.onmousemove=mouseMove;
 document.body.onmouseup=function()
 {mousePressed=0;oldMouseX=-1;oldMouseY=-1;for(i=0;i<workers;i++)
 if(blockSize[i]>1)
