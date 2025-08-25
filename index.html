@@ -34,8 +34,9 @@
 
 			.info {
 				position: absolute;
-				top: 10px;
-				left: 10px;
+				bottom: 10px;
+				left: 50%;
+				transform: translateX(-50%);
 				color: rgba(255, 255, 255, 0.8);
 				font-size: 11px;
 				font-weight: 300;
@@ -102,6 +103,7 @@
 	<div class="info" id="info">
 		<div>ZOOM: <span id="zoom">1.0×</span></div>
 		<div>ITER: <span id="iterations">286</span></div>
+		<div>TIME: <span id="renderTime">0.0s</span></div>
 	</div>
 	
 	<div class="gesture-hint">
@@ -211,6 +213,20 @@
 		document.getElementById('iterations').textContent = iterations;
 	}
 
+	// Show info panel after render completion
+	function showInfoAfterRender(renderTimeMs) {
+		updateInfoDisplay();
+		const timeText = (renderTimeMs / 1000).toFixed(1) + 's';
+		document.getElementById('renderTime').textContent = timeText;
+		showInfo();
+	}
+
+	// Hide info panel (called when zoom/movement starts)
+	function hideInfo() {
+		clearTimeout(infoTimeout);
+		document.getElementById('info').classList.add('hidden');
+	}
+
 	// Reset functionality
 	function resetView() {
 		// Reset to home position like the original
@@ -238,7 +254,7 @@
 		clearTimeout(infoTimeout);
 		infoTimeout = setTimeout(() => {
 			document.getElementById('info').classList.add('hidden');
-		}, 3000);
+		}, 5000);
 	}
 
 	// Show info on interaction - only for mouse, let mandel-workers.js handle touch
