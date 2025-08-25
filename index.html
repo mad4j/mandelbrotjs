@@ -103,6 +103,7 @@
 	<div class="info" id="info">
 		<div>ZOOM: <span id="zoom">1.0×</span></div>
 		<div>ITER: <span id="iterations">286</span></div>
+		<div>CORES: <span id="workers">4</span></div>
 		<div>TIME: <span id="renderTime">0.0s</span></div>
 	</div>
 	
@@ -211,6 +212,10 @@
 		const zoomText = zoom > 1000 ? zoom.toExponential(2) : zoom.toFixed(1) + '×';
 		document.getElementById('zoom').textContent = zoomText;
 		document.getElementById('iterations').textContent = iterations;
+		// Display worker count from mandel-workers.js
+		if (typeof workers !== 'undefined') {
+			document.getElementById('workers').textContent = workers;
+		}
 	}
 
 	// Show info panel after render completion
