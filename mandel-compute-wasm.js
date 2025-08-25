@@ -183,14 +183,14 @@ function wasmMandelCompute(e) {
         let mandelData, smoothMandel;
         
         if (smooth) {
-            const result = wasmModule.mandel_compute_segment_with_smooth(
+            const result = wasmModule.mandel_compute_segment_with_smooth_optimized(
                 startLine, segmentHeight, canvasWidth,
                 screenX, screenY, zoom, iter_max, blockSize
             );
             mandelData = new Uint8Array(result.mandel_data);
             smoothMandel = new Uint8Array(result.smooth_data);
         } else {
-            const resultData = wasmModule.mandel_compute_segment(
+            const resultData = wasmModule.mandel_compute_segment_optimized(
                 startLine, segmentHeight, canvasWidth,
                 screenX, screenY, zoom, iter_max, smooth, blockSize
             );
@@ -199,7 +199,7 @@ function wasmMandelCompute(e) {
         }
         
         const computeTime = performance.now() - startTime;
-        console.log(`WASM computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
+        console.log(`WASM computation took ${computeTime.toFixed(2)}ms for worker ${workerID} (optimized)`);
         
         // Send periodic progress updates for fine rendering
         if (blockSize == 1) {
