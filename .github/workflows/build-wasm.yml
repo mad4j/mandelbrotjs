@@ -24,6 +24,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: write  # Required to push commits back to the repository
+
 jobs:
   build-wasm:
     runs-on: ubuntu-latest
