@@ -114,67 +114,49 @@
 
 	<canvas id="mandelCanvas" onwheel="wheelMoved(event);">Sorry, your browser does not have HTML canvas support.</canvas>
 	
-	<!-- Hidden elements to prevent errors in mandel-workers.js -->
-	<div id="logText" style="display: none;"></div>
-	<div id="workingText" style="display: none;"></div>
-	<div id="zoomText" style="display: none;"></div>
-	<div id="mandelText" style="display: none;"></div>
-	<div id="currentPalette" style="display: none;"></div>
-	<input id="iterSlider" type="range" style="display: none;" value="286">
-	<input id="itersInput" type="number" style="display: none;" value="286">
-	<input id="xPosText" type="text" style="display: none;">
-	<input id="yPosText" type="text" style="display: none;">
-	<div id="coordSource" style="display: none;"></div>
-	<div id="coordSource2" style="display: none;"></div>
-	<div id="cycle" style="display: none;"></div>
-	<div id="nextPalette" style="display: none;"></div>
-	<div id="prevPalette" style="display: none;"></div>
-	<div id="aboutClose" style="display: none;"></div>
-	<div id="linkClose" style="display: none;"></div>
-	<div id="posterClose" style="display: none;"></div>
-	<div id="aboutBox" style="display: none;"></div>
-	<div id="linkDialog" style="display: none;"></div>
-	<div id="posterDialog" style="display: none;"></div>
-	<div id="posterDialogBody" style="display: none;"></div>
-	<div id="permalinkURL" style="display: none;"></div>
-	<div id="permalinkAnchor" style="display: none;"></div>
-	<div id="aboutBoxContent" style="display: none;"></div>
-	<div id="showInstructionsBtn" style="display: none;"></div>
-	<div id="showMathematicsBtn" style="display: none;"></div>
-	<div id="showFractalsBtn" style="display: none;"></div>
-	<select id="jumpTo" style="display: none;"><option value="choose">Jump To...</option></select>
-	<input type="checkbox" id="showAxes" style="display: none;">
-	<input type="checkbox" id="smooth" style="display: none;">
+
+
+<script>
+	// Minimal variable stubs for mandel-workers.js compatibility
+	var logText = { innerHTML: '' };
+	var workingText = { innerHTML: '', style: { visibility: 'hidden' } };
+	var cycleText = { innerHTML: 'Animate' };
+	var zoomText = { textContent: '' };
+	var iterSlider = { value: 286, disabled: false };
+	var itersInput = { value: 286, disabled: false };
+	var xPosText = { value: '', reportValidity: () => true };
+	var yPosText = { value: '', reportValidity: () => true };
+	var paletteText = { innerHTML: 'Original' };
+	var nextPalette = { disabled: false };
+	var prevPalette = { disabled: false };
+	var showAxesBox = { checked: false, disabled: false };
+	var smoothBox = { checked: true, disabled: false };
+	var coordSourceText = { textContent: '' };
+	var coordSource2Text = { textContent: '' };
+	var posterDialog = { style: { display: 'none' } };
+	var posterDialogBody = { removeChild: () => {} };
+	var linkDialog = { style: { display: 'none' } };
+	var aboutBox = { style: { display: 'none' } };
+	var aboutBoxContent = { innerHTML: '', src: '' };
+	var permalinkURL = { innerHTML: '' };
+	var permalinkAnchor = { innerHTML: '' };
+	var jumpSelect = { options: [{ value: 'choose' }], selectedIndex: 0, disabled: false };
+	var showInstructionsBtn = { classList: { add: () => {}, remove: () => {} } };
+	var showMathematicsBtn = { classList: { add: () => {}, remove: () => {} } };
+	var showFractalsBtn = { classList: { add: () => {}, remove: () => {} } };
+	
+	// Stub onclick handlers to prevent errors
+	var aboutClose = { onclick: null };
+	var linkClose = { onclick: null };
+	var posterClose = { onclick: null };
+</script>
 
 <script src="mandel-workers.js"></script>
 <script>
-	// Stub functions for missing UI elements to prevent errors
-	function changeIters() {}
-	function toggleAxes() { showAxes = 0; }
-	function toggleSmooth() { smooth = 1; }
-	function showAboutBox() {}
-	function jumpTo() {}
-	function newCoords() {}
-	function saveState() {}
-	function makePoster() {}
-	function incrPalette() { if (typeof nextPaletteClickHandler === 'function') nextPaletteClickHandler(); }
-	function decrPalette() { if (typeof prevPaletteClickHandler === 'function') prevPaletteClickHandler(); }
-	function toggleRotatePalette() { if (typeof cycleClickHandler === 'function') cycleClickHandler(); }
 
-	// Override variables that reference missing DOM elements
-	if (typeof logText === 'undefined' || !logText) logText = { innerHTML: '' };
-	if (typeof cycleText === 'undefined' || !cycleText) cycleText = { innerHTML: 'Animate' };
-	if (typeof workingText === 'undefined' || !workingText) workingText = { innerHTML: '', style: { visibility: 'hidden' } };
-	if (typeof zoomText === 'undefined' || !zoomText) zoomText = { innerHTML: '' };
-	if (typeof iterSlider === 'undefined' || !iterSlider) iterSlider = { value: 286 };
-	if (typeof mandelText === 'undefined' || !mandelText) mandelText = { innerHTML: '' };
-	if (typeof itersInput === 'undefined' || !itersInput) itersInput = { value: 286 };
-	if (typeof xPosText === 'undefined' || !xPosText) xPosText = { value: '', reportValidity: () => true };
-	if (typeof yPosText === 'undefined' || !yPosText) yPosText = { value: '', reportValidity: () => true };
-	if (typeof paletteText === 'undefined' || !paletteText) paletteText = { innerHTML: 'Original' };
-	if (typeof viewportTag === 'undefined' || !viewportTag) viewportTag = { setAttribute: () => {} };
 
-	// Disable Julia set display
+
+
 	showAxes = 0;
 	smooth = 1;
 
