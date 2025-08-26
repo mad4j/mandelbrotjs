@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" id="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <title>Mandelbrot Explorer - Enhanced</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            display: block;
+            border: 2px solid #00ff00;
+        }
+
+        .info {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+            z-index: 10;
+            background: rgba(0, 50, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 6px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: opacity 0.3s ease;
+            border: 1px solid rgba(0, 255, 0, 0.3);
+        }
+
+        .info.hidden {
+            opacity: 0;
+        }
+
+        .reset-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 255, 0, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(0, 255, 0, 0.8);
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .reset-btn:active {
+            transform: scale(0.9);
+            background: rgba(0, 255, 0, 0.2);
+        }
+
+        .status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: rgba(0, 255, 0, 0.8);
+            font-size: 10px;
+            background: rgba(0, 50, 0, 0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .gesture-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(0, 255, 0, 0.6);
+            font-size: 14px;
+            text-align: center;
+            pointer-events: none;
+            animation: fadeOut 4s ease-out forwards;
+            animation-delay: 2s;
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="status" id="status">
+        Enhanced API Loading...
+    </div>
+    
+    <div class="info" id="info">
+        <div><strong>ENHANCED MANDELBROT</strong></div>
+        <div>ZOOM: <span id="zoom">1.0×</span></div>
+        <div>ITER: <span id="iterations">200</span> (auto)</div>
+        <div>TIME: <span id="renderTime">0.0s</span></div>
+        <div>ENGINE: <span id="computeEngine">Enhanced WASM</span></div>
+        <div>THREADS: <span id="threadCount">4</span></div>
+    </div>
+    
+    <div class="gesture-hint">
+        Enhanced Mandelbrot Explorer<br>
+        Pinch to zoom • Drag to pan • Double tap to zoom
+    </div>
+
+    <div class="reset-btn" id="resetBtn">↺</div>
+
+    <canvas id="mandelCanvas" width="600" height="600">
+        Sorry, your browser does not have WebAssembly support.
+    </canvas>
+    
+    <script>
+        // Enhanced Mandelbrot interface using refactored Rust API
+        
+        let wasmModule = null;
+        let wasmInitialized = false;
+        
+        // View parameters
+        let zoom = 300;
+        let centerReal = -0.5;
+        let centerImag = 0.0;
+        let maxIterations = 200;
+        let smoothRendering = true;
+        
+        // Canvas and rendering
+        const canvas = document.getElementById('mandelCanvas');
+        const ctx = canvas.getContext('2d');
+        const canvasWidth = 600;
+        const canvasHeight = 600;
+        
+        // Threading
+        const workers = Math.max(2, Math.min(navigator.hardwareConcurrency || 4, 8));
+        let activeWorkers = [];
+        let renderingInProgress = false;
+        
+        // UI elements
+        const statusEl = document.getElementById('status');
+        const infoEl = document.getElementById('info');
+        const zoomEl = document.getElementById('zoom');
+        const iterEl = document.getElementById('iterations');
+        const timeEl = document.getElementById('renderTime');
+        const threadsEl = document.getElementById('threadCount');
+        
+        // Initialize WebAssembly
+        async function initWasm() {
+            try {
+                statusEl.textContent = 'Loading Enhanced WASM...';
+                
+                // Load the enhanced WASM module using script tag approach for better compatibility
+                const script = document.createElement('script');
+                script.src = './pkg/mandel_wasm.js';
+                
+                await new Promise((resolve, reject) => {
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+                
+                // Initialize WASM
+                await wasm_bindgen('./pkg/mandel_wasm_bg.wasm');
+                wasmModule = wasm_bindgen;
+                wasmInitialized = true;
+                
+                statusEl.textContent = 'Enhanced WASM Ready';
+                threadsEl.textContent = workers;
+                
+                console.log('Enhanced Mandelbrot WASM loaded successfully');
+                
+                // Start initial render
+                renderMandelbrot();
+                
+            } catch (error) {
+                console.error('Failed to load enhanced WASM:', error);
+                statusEl.textContent = 'WASM Load Failed - ' + error.message;
+            }
+        }
+        
+        // Calculate optimal iterations based on zoom
+        function calculateOptimalIterations() {
+            if (wasmInitialized && wasmModule.calculate_optimal_iterations) {
+                return wasmModule.calculate_optimal_iterations(zoom, 128, 1500);
+            }
+            
+            // Fallback calculation
+            const zoomFactor = Math.log10(Math.max(1, zoom));
+            return Math.min(1500, Math.max(128, Math.floor(128 + zoomFactor * 32)));
+        }
+        
+        // Enhanced rendering using new unified API
+        async function renderMandelbrot() {
+            if (!wasmInitialized || renderingInProgress) return;
+            
+            renderingInProgress = true;
+            const startTime = performance.now();
+            
+            // Update iterations dynamically
+            maxIterations = calculateOptimalIterations();
+            
+            // Update UI
+            updateInfoDisplay();
+            hideInfo();
+            statusEl.textContent = 'Rendering...';
+            
+            try {
+                // Calculate complex plane bounds
+                const realRange = canvasWidth / zoom;
+                const imagRange = canvasHeight / zoom;
+                const minReal = centerReal - realRange / 2;
+                const maxReal = centerReal + realRange / 2;
+                const minImag = centerImag - imagRange / 2;
+                const maxImag = centerImag + imagRange / 2;
+                
+                // Create parameters for unified API
+                const params = new wasmModule.MandelParameters(
+                    minReal, maxReal, minImag, maxImag,
+                    canvasWidth, canvasHeight,
+                    maxIterations, smoothRendering, 8
+                );
+                
+                // Use the unified API to generate the complete image
+                const result = wasmModule.generate_mandelbrot_image(params);
+                
+                // Create ImageData and display
+                const imageData = new ImageData(
+                    new Uint8ClampedArray(result.image_data),
+                    result.width,
+                    result.height
+                );
+                
+                ctx.putImageData(imageData, 0, 0);
+                
+                const endTime = performance.now();
+                const renderTime = endTime - startTime;
+                
+                console.log(`Enhanced render completed in ${renderTime.toFixed(2)}ms`);
+                console.log(`WASM computation time: ${result.computation_time_ms.toFixed(2)}ms`);
+                
+                statusEl.textContent = 'Enhanced WASM Ready';
+                timeEl.textContent = (renderTime / 1000).toFixed(2) + 's';
+                showInfo();
+                
+            } catch (error) {
+                console.error('Enhanced rendering failed:', error);
+                statusEl.textContent = 'Render Failed';
+            }
+            
+            renderingInProgress = false;
+        }
+        
+        // Update info display
+        function updateInfoDisplay() {
+            const zoomText = zoom > 1000 ? zoom.toExponential(2) : zoom.toFixed(1) + '×';
+            zoomEl.textContent = zoomText;
+            iterEl.textContent = maxIterations;
+        }
+        
+        // UI interaction handlers
+        let mousePressed = false;
+        let lastMouseX = -1;
+        let lastMouseY = -1;
+        
+        canvas.addEventListener('mousedown', (e) => {
+            mousePressed = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            hideInfo();
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (!mousePressed) return;
+            
+            const deltaX = e.clientX - lastMouseX;
+            const deltaY = e.clientY - lastMouseY;
+            
+            const realDelta = deltaX / zoom;
+            const imagDelta = deltaY / zoom;
+            
+            centerReal -= realDelta;
+            centerImag += imagDelta;
+            
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            
+            renderMandelbrot();
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            mousePressed = false;
+            lastMouseX = -1;
+            lastMouseY = -1;
+        });
+        
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            hideInfo();
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Calculate complex coordinates at mouse position
+            const realRange = canvasWidth / zoom;
+            const imagRange = canvasHeight / zoom;
+            const mouseReal = centerReal + (mouseX - canvasWidth/2) / zoom;
+            const mouseImag = centerImag + (mouseY - canvasHeight/2) / zoom;
+            
+            // Zoom
+            const zoomFactor = e.deltaY > 0 ? 0.8 : 1.25;
+            zoom *= zoomFactor;
+            zoom = Math.max(10, Math.min(zoom, 1e15));
+            
+            // Adjust center to zoom towards mouse
+            const newRealRange = canvasWidth / zoom;
+            const newImagRange = canvasHeight / zoom;
+            centerReal = mouseReal - (mouseX - canvasWidth/2) / zoom;
+            centerImag = mouseImag - (mouseY - canvasHeight/2) / zoom;
+            
+            renderMandelbrot();
+        });
+        
+        // Reset view
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            centerReal = -0.5;
+            centerImag = 0.0;
+            zoom = 300;
+            renderMandelbrot();
+        });
+        
+        // Touch events for mobile
+        let pinchDistance = 0;
+        
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                pinchDistance = Math.sqrt(dx*dx + dy*dy);
+            }
+            hideInfo();
+        });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            
+            if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const newDistance = Math.sqrt(dx*dx + dy*dy);
+                
+                if (pinchDistance > 0) {
+                    const zoomFactor = newDistance / pinchDistance;
+                    zoom *= zoomFactor;
+                    zoom = Math.max(10, Math.min(zoom, 1e15));
+                    renderMandelbrot();
+                }
+                
+                pinchDistance = newDistance;
+            }
+        });
+        
+        canvas.addEventListener('touchend', () => {
+            pinchDistance = 0;
+        });
+        
+        // Info display management
+        let infoTimeout;
+        
+        function showInfo() {
+            infoEl.classList.remove('hidden');
+            clearTimeout(infoTimeout);
+            infoTimeout = setTimeout(() => {
+                infoEl.classList.add('hidden');
+            }, 3000);
+        }
+        
+        function hideInfo() {
+            infoEl.classList.add('hidden');
+            clearTimeout(infoTimeout);
+        }
+        
+        // Start the application
+        initWasm();
+    </script>
+</body>
+</html>
