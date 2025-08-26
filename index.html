@@ -104,7 +104,7 @@
 		<div>ZOOM: <span id="zoom">1.0×</span></div>
 		<div>ITER: <span id="iterations">286</span></div>
 		<div>TIME: <span id="renderTime">0.0s</span></div>
-		<div>ENGINE: <span id="computeEngine">JS</span></div>
+		<div>ENGINE: <span id="computeEngine">WASM</span></div>
 	</div>
 	
 	<div class="gesture-hint">
@@ -169,24 +169,7 @@
 	if (typeof zoomText === 'undefined' || !zoomText) zoomText = { innerHTML: '' };
 	if (typeof iterSlider === 'undefined' || !iterSlider) iterSlider = { value: 286 };
 
-	// Global variable to track actual WASM usage reported by workers
-	let actualWasmUsage = false;
-	let wasmUsageDetected = false;
-	
-	// Simple timer-based detection: if we're using WASM worker, assume WASM is ready after a few seconds
-	let wasmCheckInterval = setInterval(() => {
-		if (typeof COMPUTE_WORKER_SCRIPT !== 'undefined' && COMPUTE_WORKER_SCRIPT.includes('wasm')) {
-			// Give WASM some time to initialize (2 seconds should be enough)
-			if (performance.now() > 2000) {
-				wasmUsageDetected = true;
-				actualWasmUsage = true;
-				updateInfoDisplay();
-				clearInterval(wasmCheckInterval);
-			}
-		} else {
-			clearInterval(wasmCheckInterval);
-		}
-	}, 500);
+	// No longer need WASM detection - WASM is the only engine
 	if (typeof mandelText === 'undefined' || !mandelText) mandelText = { innerHTML: '' };
 	if (typeof itersInput === 'undefined' || !itersInput) itersInput = { value: 286 };
 	if (typeof xPosText === 'undefined' || !xPosText) xPosText = { value: '', reportValidity: () => true };
@@ -221,15 +204,8 @@
 		document.getElementById('zoom').textContent = zoomText;
 		document.getElementById('iterations').textContent = iterations;
 		
-		// Update compute engine information
-		let engineText;
-		if (wasmUsageDetected) {
-			engineText = actualWasmUsage ? 'WASM' : 'JS (fallback)';
-		} else {
-			// Show loading status if using WASM worker
-			engineText = (typeof COMPUTE_WORKER_SCRIPT !== 'undefined' && COMPUTE_WORKER_SCRIPT.includes('wasm')) ? 'WASM (loading...)' : 'JS';
-		}
-		document.getElementById('computeEngine').textContent = engineText;
+		// Always show WASM as the only compute engine
+		document.getElementById('computeEngine').textContent = 'WASM';
 	}
 
 	// Show info panel after render completion
