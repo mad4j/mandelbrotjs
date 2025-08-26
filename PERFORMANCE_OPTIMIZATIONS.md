@@ -81,12 +81,43 @@ overflow-checks = false
 debug-assertions = false
 ```
 
+### Dependencies
+```toml
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+rayon = "1.8"  # Added for aggressive parallelization
+```
+
 ## Future Optimization Opportunities
 
 1. **SIMD Instructions**: Could implement SIMD for parallel point computation
-2. **WebAssembly Threading**: Multi-threading support for even better performance
+2. **WebAssembly Threading**: Multi-threading support for even better performance - **IMPLEMENTED with Rayon**
 3. **GPU Compute**: WebGPU integration for GPU-accelerated computation
 4. **Advanced Algorithms**: Perturbation theory and other mathematical optimizations
+
+## Rayon Parallelism Implementation
+
+**Added aggressive parallelization using Rayon library**
+- Replaced sequential row-by-row processing with parallel chunk processing
+- Uses `par_chunks_mut()` to process image rows in parallel
+- Maintains mathematical correctness while improving performance
+- Automatically scales to available CPU cores
+
+### Implementation Details
+```rust
+// Parallelize the computation across rows using Rayon
+buf.par_chunks_mut(width as usize)
+    .enumerate()
+    .for_each(|(y, row_chunk)| {
+        // Process each pixel in the row
+        for x in 0..width {
+            // Mandelbrot computation remains unchanged
+            let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
+            row_chunk[x as usize] = result_value;
+        }
+    });
+```
 
 ## Testing
 The optimizations have been tested and validated:

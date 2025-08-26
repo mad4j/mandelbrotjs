@@ -1,16 +1,11 @@
 use wasm_bindgen::prelude::*;
-use std::cell::RefCell;
+use rayon::prelude::*;
 
 // Import the `console.log` function from the `console` object
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
-}
-
-// Thread-local memory pools for avoiding allocations
-thread_local! {
-    static IMAGE_BUFFER: RefCell<Vec<u8>> = RefCell::new(Vec::new());
 }
 
 /// Single unified function for Mandelbrot image generation
@@ -34,22 +29,18 @@ pub fn mandel_generate_image(
     log(&format!("WASM: center_x={}, center_y={}, zoom={}, start_line={}, width={}, height={}", 
                  center_x, center_y, zoom, start_line, width, height));
     
-    // Use thread-local buffer for efficient memory management
-    IMAGE_BUFFER.with(|buffer| {
-        let mut buf = buffer.borrow_mut();
-        if buf.len() < total_pixels {
-            buf.resize(total_pixels, 0);
-        }
+    // Create a vector to hold the results - we'll fill this in parallel
+    let mut buf = vec![0u8; total_pixels];
 
-        // Iterate through all pixels to generate the image
-        for y in 0..height {
-            let row_start = (y * width) as usize;
-            
+    // Parallelize the computation across rows using Rayon
+    buf.par_chunks_mut(width as usize)
+        .enumerate()
+        .for_each(|(y, row_chunk)| {
             for x in 0..width {
                 // Convert pixel coordinates to complex plane coordinates
                 // The full canvas coordinates for this pixel are (x, y + start_line)
                 let canvas_x = x as f64;
-                let canvas_y = (y + start_line) as f64;
+                let canvas_y = (y as i32 + start_line) as f64;
                 
                 // Convert to complex plane coordinates centered on center_x, center_y
                 let x_norm = center_x + (canvas_x - width as f64 / 2.0) / zoom;
@@ -72,18 +63,16 @@ pub fn mandel_generate_image(
                 };
                 
                 // Debug first few pixels
-                if x < 3 && y < 3 {
+                if x < 3 && y == 0 {
                     log(&format!("Pixel ({}, {}): iteration={}, result_value={}", x, y, iteration, result_value));
                 }
                 
-                let pixel_index = row_start + x as usize;
-                buf[pixel_index] = result_value;
+                row_chunk[x as usize] = result_value;
             }
-        }
+        });
         
-        // Return slice as boxed slice for transfer to JS
-        buf[0..total_pixels].into()
-    })
+    // Return as boxed slice for transfer to JS
+    buf.into_boxed_slice()
 }
 
 #[inline(always)]
