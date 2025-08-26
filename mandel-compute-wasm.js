@@ -87,6 +87,9 @@ function wasmMandelCompute(e) {
         const startTime = performance.now();
         let mandelData, smoothMandel;
         
+        // Use large segment optimization for bigger chunks (>200px height)
+        const useLargeSegmentOptimization = segmentHeight > 200 && !smooth;
+        
         if (smooth) {
             const result = wasmModule.mandel_compute_segment_with_smooth_optimized(
                 startLine, segmentHeight, canvasWidth,
@@ -94,6 +97,15 @@ function wasmMandelCompute(e) {
             );
             mandelData = new Uint8Array(result.mandel_data);
             smoothMandel = new Uint8Array(result.smooth_data);
+        } else if (useLargeSegmentOptimization) {
+            // Use the large segment optimized function for better performance
+            const resultData = wasmModule.mandel_compute_large_segment_optimized(
+                startLine, segmentHeight, canvasWidth,
+                screenX, screenY, zoom, iter_max, smooth, blockSize
+            );
+            mandelData = new Uint8Array(resultData);
+            smoothMandel = new Uint8Array(1); // Empty for non-smooth
+            console.log(`Using large segment optimization for ${segmentHeight}px segment`);
         } else {
             const resultData = wasmModule.mandel_compute_segment_optimized(
                 startLine, segmentHeight, canvasWidth,
@@ -104,7 +116,15 @@ function wasmMandelCompute(e) {
         }
         
         const computeTime = performance.now() - startTime;
-        console.log(`WASM computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
+        const pixelsProcessed = segmentHeight * canvasWidth;
+        const pixelsPerMs = pixelsProcessed / computeTime;
+        
+        console.log(`WASM computation: ${computeTime.toFixed(2)}ms for worker ${workerID} | ${segmentHeight}px segment | ${pixelsProcessed} pixels | ${pixelsPerMs.toFixed(0)} pixels/ms`);
+        
+        // Performance logging for optimization tracking
+        if (segmentHeight > 200) {
+            console.log(`🚀 Large segment optimization: ${segmentHeight}x${canvasWidth} processed in ${computeTime.toFixed(2)}ms`);
+        }
         
         self.postMessage({
             finished: 1,

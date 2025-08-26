@@ -337,3 +337,67 @@ pub fn mandel_compute_segment_with_smooth_optimized(
         })
     })
 }
+
+// Enhanced function for processing large image segments efficiently
+// Optimized for minimal JS-WASM boundary crossings with vectorized processing
+#[wasm_bindgen]
+pub fn mandel_compute_large_segment_optimized(
+    start_line: i32,
+    segment_height: i32,
+    canvas_width: i32,
+    screen_x: f64,
+    screen_y: f64,
+    zoom: f64,
+    iter_max: i32,
+    smooth: bool,
+    _block_size: i32,
+) -> Box<[u8]> {
+    let escape_squared = if smooth { 256.0 } else { 4.0 };
+    let total_size = (canvas_width * segment_height) as usize;
+    
+    // Use optimized processing for large segments
+    MANDEL_BUFFER.with(|buffer| {
+        let mut buf = buffer.borrow_mut();
+        if buf.len() < total_size {
+            buf.resize(total_size, 0);
+        }
+        
+        // Process in larger blocks for better cache performance with large segments
+        let processing_block_size = if segment_height > 300 { 4 } else { 2 };
+        
+        let mut y = 0;
+        while y < segment_height {
+            let y_end = std::cmp::min(y + processing_block_size, segment_height);
+            let y_norm_base = (start_line as f64 - screen_y) / zoom;
+            
+            for current_y in y..y_end {
+                let y_norm = y_norm_base + (current_y as f64 / zoom);
+                let y_offset = (current_y * canvas_width) as usize;
+                
+                // Vectorized processing across the width
+                let mut x = 0;
+                while x < canvas_width {
+                    let x_end = std::cmp::min(x + 8, canvas_width); // Process 8 pixels at once
+                    
+                    for current_x in x..x_end {
+                        let x_norm = (current_x as f64 - screen_x) / zoom;
+                        let iteration = mandel_point_optimized(x_norm, y_norm, iter_max, escape_squared);
+                        
+                        let result_iteration = if iteration == iter_max {
+                            255
+                        } else {
+                            (iteration % 255) as u8
+                        };
+                        
+                        buf[y_offset + current_x as usize] = result_iteration;
+                    }
+                    x = x_end;
+                }
+            }
+            y = y_end;
+        }
+        
+        // Return optimized slice
+        buf[0..total_size].into()
+    })
+}

@@ -76,6 +76,25 @@ let wasm_bindgen;
         return MandelSegmentResultOptimized.__wrap(ret);
     };
 
+    /**
+     * @param {number} start_line
+     * @param {number} segment_height
+     * @param {number} canvas_width
+     * @param {number} screen_x
+     * @param {number} screen_y
+     * @param {number} zoom
+     * @param {number} iter_max
+     * @param {boolean} smooth
+     * @param {number} _block_size
+     * @returns {Uint8Array}
+     */
+    __exports.mandel_compute_large_segment_optimized = function(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, smooth, _block_size) {
+        const ret = wasm.mandel_compute_large_segment_optimized(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, smooth, _block_size);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    };
+
     const MandelComputeResultFinalization = (typeof FinalizationRegistry === 'undefined')
         ? { register: () => {}, unregister: () => {} }
         : new FinalizationRegistry(ptr => wasm.__wbg_mandelcomputeresult_free(ptr >>> 0, 1));

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Large Segment WASM Optimization Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        .performance { background-color: #fff3cd; border-color: #ffeaa7; }
+        canvas { border: 1px solid #000; margin: 10px; }
+        #log { height: 200px; overflow-y: scroll; font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Large Segment WASM Optimization Test</h1>
+    
+    <div id="results"></div>
+    
+    <h3>Performance Log:</h3>
+    <div id="log"></div>
+    
+    <h3>Rendered Segments:</h3>
+    <div id="canvases"></div>
+
+    <script>
+        const resultsDiv = document.getElementById('results');
+        const logDiv = document.getElementById('log');
+        const canvasesDiv = document.getElementById('canvases');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            resultsDiv.appendChild(div);
+        }
+        
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        // Test parameters for different segment sizes
+        const testConfigs = [
+            { name: 'Small Segment (Classic)', segmentHeight: 150, workers: 8 },
+            { name: 'Medium Segment', segmentHeight: 300, workers: 4 },
+            { name: 'Large Segment (Optimized)', segmentHeight: 600, workers: 2 },
+            { name: 'Extra Large Segment', segmentHeight: 900, workers: 1 }
+        ];
+        
+        const baseParams = {
+            canvasWidth: 600,
+            screenX: 300,
+            screenY: 300,
+            zoom: 1000,
+            iterations: 300,
+            smooth: false,
+            blockSize: 1
+        };
+        
+        addResult('🧪 Starting Large Segment WASM Performance Tests...', 'info');
+        
+        async function runTest(config) {
+            addLog(`Testing: ${config.name} (${config.segmentHeight}px segments, ${config.workers} workers)`);
+            
+            return new Promise((resolve) => {
+                const worker = new Worker('mandel-compute-wasm.js');
+                const startTime = performance.now();
+                
+                worker.onmessage = function(e) {
+                    const totalTime = performance.now() - startTime;
+                    const pixelsProcessed = config.segmentHeight * baseParams.canvasWidth;
+                    const pixelsPerMs = pixelsProcessed / totalTime;
+                    
+                    addLog(`✅ ${config.name} completed in ${totalTime.toFixed(2)}ms (${pixelsPerMs.toFixed(0)} pixels/ms)`);
+                    
+                    // Create a small visualization
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 300;
+                    canvas.height = Math.min(150, config.segmentHeight);
+                    canvas.title = `${config.name}: ${totalTime.toFixed(2)}ms`;
+                    
+                    const ctx = canvas.getContext('2d');
+                    const imageData = ctx.createImageData(canvas.width, canvas.height);
+                    
+                    // Render a sample of the computed data
+                    const mandelData = new Uint8Array(e.data.mandel);
+                    const scaleX = baseParams.canvasWidth / canvas.width;
+                    const scaleY = config.segmentHeight / canvas.height;
+                    
+                    for (let y = 0; y < canvas.height; y++) {
+                        for (let x = 0; x < canvas.width; x++) {
+                            const sourceX = Math.floor(x * scaleX);
+                            const sourceY = Math.floor(y * scaleY);
+                            const sourceIndex = sourceY * baseParams.canvasWidth + sourceX;
+                            const value = mandelData[sourceIndex] || 0;
+                            
+                            const pixelIndex = (y * canvas.width + x) * 4;
+                            imageData.data[pixelIndex] = value;     // R
+                            imageData.data[pixelIndex + 1] = value; // G
+                            imageData.data[pixelIndex + 2] = value; // B
+                            imageData.data[pixelIndex + 3] = 255;   // A
+                        }
+                    }
+                    
+                    ctx.putImageData(imageData, 0, 0);
+                    canvasesDiv.appendChild(canvas);
+                    
+                    worker.terminate();
+                    resolve({
+                        config,
+                        time: totalTime,
+                        pixelsPerMs: pixelsPerMs
+                    });
+                };
+                
+                worker.onerror = function(error) {
+                    addLog(`❌ ${config.name} failed: ${error.message}`);
+                    worker.terminate();
+                    resolve({ config, time: Infinity, pixelsPerMs: 0 });
+                };
+                
+                // Send test computation request
+                worker.postMessage({
+                    workerID: 0,
+                    startLine: 0,
+                    blockSize: baseParams.blockSize,
+                    canvasWidth: baseParams.canvasWidth,
+                    segmentHeight: config.segmentHeight,
+                    screenX: baseParams.screenX,
+                    screenY: baseParams.screenY,
+                    zoom: baseParams.zoom,
+                    iterations: baseParams.iterations,
+                    oneShot: 0,
+                    smooth: baseParams.smooth ? 1 : 0
+                });
+            });
+        }
+        
+        async function runAllTests() {
+            const results = [];
+            
+            for (const config of testConfigs) {
+                const result = await runTest(config);
+                results.push(result);
+                
+                // Add some delay between tests
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            // Calculate performance improvements
+            addResult('📊 Performance Analysis:', 'info');
+            
+            const smallestTime = Math.min(...results.map(r => r.time));
+            const bestPixelsPerMs = Math.max(...results.map(r => r.pixelsPerMs));
+            
+            results.forEach(result => {
+                if (result.time === Infinity) return;
+                
+                const speedup = (result.pixelsPerMs / results[0].pixelsPerMs).toFixed(2);
+                const efficiency = (result.time / smallestTime).toFixed(2);
+                
+                const message = `${result.config.name}: ${speedup}x throughput vs baseline`;
+                addResult(message, speedup > 1.2 ? 'success' : 'performance');
+            });
+            
+            // Find the best performing configuration
+            const bestResult = results.reduce((best, current) => 
+                current.pixelsPerMs > best.pixelsPerMs ? current : best
+            );
+            
+            addResult(`🏆 Best Performance: ${bestResult.config.name} with ${bestResult.pixelsPerMs.toFixed(0)} pixels/ms`, 'success');
+            
+            // Check if large segments show improvement
+            const largeSegmentResults = results.filter(r => r.config.segmentHeight >= 300);
+            const smallSegmentResults = results.filter(r => r.config.segmentHeight < 300);
+            
+            if (largeSegmentResults.length > 0 && smallSegmentResults.length > 0) {
+                const avgLargePerformance = largeSegmentResults.reduce((sum, r) => sum + r.pixelsPerMs, 0) / largeSegmentResults.length;
+                const avgSmallPerformance = smallSegmentResults.reduce((sum, r) => sum + r.pixelsPerMs, 0) / smallSegmentResults.length;
+                const improvement = (avgLargePerformance / avgSmallPerformance).toFixed(2);
+                
+                addResult(`🎯 Large Segment Optimization: ${improvement}x performance improvement`, 'success');
+            }
+            
+            addLog('🎉 All tests completed!');
+        }
+        
+        // Start tests when page loads
+        runAllTests().catch(error => {
+            addResult(`❌ Test failed: ${error.message}`, 'error');
+            addLog(`Test error: ${error}`);
+        });
+    </script>
+</body>
+</html>
