@@ -62,11 +62,13 @@ pub fn mandel_generate_image(
                 
                 let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
                 
-                // Map iteration count to the same values as the original implementation
+                // Map iteration count to grayscale values for direct image display
                 let result_value = if iteration == max_iterations {
-                    255  // Interior points get value 255
+                    0  // Interior points are black (0)
                 } else {
-                    (iteration % 255) as u8  // Exterior points get iteration count mod 255
+                    // Map iteration count to grayscale: faster escape = brighter
+                    let normalized = (iteration as f64 / max_iterations as f64 * 255.0) as u8;
+                    255 - normalized  // Invert so that slower escape = darker
                 };
                 
                 // Debug first few pixels

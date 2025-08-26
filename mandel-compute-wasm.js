@@ -72,7 +72,9 @@ function wasmMandelCompute(e) {
             const result = wasmModule.mandel_generate_image(x_norm, y_norm, zoom, iter_max, 1, 1, 0);
             const imageData = new Uint8Array(result);
             // Convert grayscale back to iteration count approximation
-            const oneShotResult = imageData[0] === 255 ? iter_max : imageData[0];
+            // Grayscale: 0=interior (max iterations), 255=fast escape (low iterations)
+            const grayscaleValue = imageData[0];
+            const oneShotResult = grayscaleValue === 0 ? iter_max : Math.round((255 - grayscaleValue) / 255.0 * iter_max);
             self.postMessage({ oneShotResult: oneShotResult, usedWasm: true });
             return;
         } catch (error) {
