@@ -77,33 +77,13 @@ pub fn mandel_generate_image(
 
 #[inline(always)]
 fn mandel_point_optimized(x_norm: f64, y_norm: f64, iter_max: i32, escape_squared: f64) -> i32 {
-    // Improved early bailout checks for main cardioid and period-2 bulb
-    // Main cardioid check: (x+1)^2 + y^2 < 1/16
-    let main_cardioid_check = {
-        let x_plus_1 = x_norm + 1.0;
-        x_plus_1 * x_plus_1 + y_norm * y_norm < 0.0625
-    };
-    
-    // Period-2 bulb check: x^2 + y^2 < 0.25 and x > -0.75  
-    let period2_bulb_check = {
-        let dist_sq = x_norm * x_norm + y_norm * y_norm;
-        dist_sq < 0.25 && x_norm > -0.75
-    };
-    
-    if main_cardioid_check || period2_bulb_check {
-        return iter_max;
-    }
-    
-    // Remove the quick escape check as it's too aggressive and causing all pixels to escape immediately
-    
+
     let mut zr = 0.0f64;
     let mut zi = 0.0f64;
     let mut iteration = 0;
     
     // Optimized iteration loop with manual unrolling for better performance
     while iteration < iter_max {
-        // Unroll 2 iterations for better performance
-        for _ in 0..2 {
             if iteration >= iter_max {
                 break;
             }
@@ -119,15 +99,6 @@ fn mandel_point_optimized(x_norm: f64, y_norm: f64, iter_max: i32, escape_square
             zi = 2.0 * zr * zi + y_norm;
             zr = zr_new;
             iteration += 1;
-        }
-        
-        // Periodic check to avoid unnecessary computation  
-        if iteration % 16 == 0 {
-            let magnitude_sq = zr * zr + zi * zi;
-            if magnitude_sq >= escape_squared {
-                return iteration;
-            }
-        }
     }
     
     iteration
