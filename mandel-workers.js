@@ -253,36 +253,7 @@ if(workersRunning==0){
     }
 }
 };
-var onRenderEnded=function(e)
-{var workerID=e.data.workerID;
-// Traditional JS render worker logic
-mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
-// Handle ImageBitmap response when OffscreenCanvas is used
-if(e.data.useOffscreenCanvas && e.data.imageBitmap){
-    // Handle both fine and coarse rendering correctly
-    if(e.data.blockSize==1){
-        // Fine rendering - draw to offScreen canvas
-        var lstartLine=Math.floor(workerID*chunkHeight);
-        offScreenCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
-        finished[workerID]=1;
-    } else {
-        // Coarse rendering - draw to coarse canvas
-        var lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);
-        coarseCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
-        mctx.drawImage(coarse,0,0);
-    }
-} else {
-    // Fallback to original pixel array approach
-    if(e.data.blockSize==1)
-    mdSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);else
-    mdCoarseSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);
-    var lstartLine;if(e.data.blockSize==1){finished[workerID]=1;mSegment[workerID].data.set(mdSegment[workerID]);lstartLine=Math.floor(workerID*chunkHeight);offScreenCtx.putImageData(mSegment[workerID],0,lstartLine);}else{mCoarseSegment[workerID].data.set(mdCoarseSegment[workerID]);lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);mctx.drawImage(coarse,0,0);}
-}
-renderWorkerRunning[workerID]=0;workersRunning--;if(renderCount++>=20){renderCount=0;renderWorker[workerID].terminate();renderWorker[workerID]=null;renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;var zoomTmp=Math.floor(zoom);delete zoom;window.zoom=zoomTmp;}
-if(workersRunning==0){var allFinished=true;for(var i=0;i<workers;i++){if(!finished[i]){allFinished=false;break;}}if((!eventOccurred)&&(allFinished)){needRedraw=0;mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);if(!rotating){workingText.style.visibility="hidden";mc.style.borderColor="black";mc.style.outline="5px solid #FFFFFF";if(posterTime!=0){diff=Math.floor((performance.now()-posterTime)/10)/100;posterTime=0;logText.innerHTML="Poster rendered in "+diff+" s";}
-else{diff=Math.floor((performance.now()-start)/10)/100;logText.innerHTML="Rendered in "+diff+" s";if(typeof showInfoAfterRender==='function'){showInfoAfterRender(diff*1000);}}
-updateCoords(canvasWidth/2,canvasHeight/2,"centre");}
-}};
+// Legacy onRenderEnded removed - unified WASM rendering handles everything in onComputeEnded
 if(showAxes)
 drawAxes();if(startupAnim){if(startupTick<50){startupTick++;zoom=Math.ceil(Math.sin((startupTick/70)*Math.PI)*(startZoom+80));zoomText.textContent=Math.floor(zoom);if(startupTick>29){if(startupTick>30)
 timesTaken[startupTick-31]=performance.now()-timer;timer=performance.now();}}
@@ -306,7 +277,8 @@ zoom=Math.floor(ldestZoom);else
 zoom+=Math.max(Math.ceil(Math.log(ldestZoom-zoom)*(zoom/2000)*benchmarkTime*(movingToSaved*4+1)),1);screenX=Math.round(-xnorm*zoom+canvasWidth/2);screenY=Math.round(-ynorm*zoom+canvasHeight/2);}
 else{travelling=0;movingToSaved=0;start=performance.now();zoom=Math.floor(zoom);}}}
 else if((blockSize[workerID]>=2)&&(!eventOccurred)&&(!mousePressed)){if(performance.now()>zoomTime+200){needToRun[workerID]=1;blockSize[workerID]/=2;}}else
-needToRun[workerID]=0;};function wheelMoved(event)
+needToRun[workerID]=0;}
+function wheelMoved(event)
 {event.preventDefault();if(posterTime!=0)
 return 1;if(typeof hideInfo==='function'){hideInfo();}zoomTime=performance.now();eventTime=performance.now();var rect=mc.getBoundingClientRect();var mx=(event.clientX-rect.left)/(rect.width)*rect.width*scaleFactor-4;var my=(event.clientY-rect.top)/(rect.height)*rect.height*scaleFactor-4;if((mx<=0)||(mx>canvasWidth)||(my<=0)||(my>canvasHeight))
 return 1;var xnorm=(mx*1.0-screenX)/zoom;var ynorm=(my*1.0-screenY)/zoom;if(((zoom==maxZoom)&&(event.deltaY<0))||((zoom==minZoom)&&(event.deltaY>0)))
@@ -368,8 +340,8 @@ needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((n
 // Always use WASM unified rendering - no separate render step needed
 if(!computeWorker[i]){computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onComputeEnded;}
 workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
-computeWorker[i].postMessage({workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,useUnifiedRendering:true});else
-computeWorker[i].postMessage({workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,useUnifiedRendering:true});}}}
+computeWorker[i].postMessage({workerID:i,startLine:startLine,canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0});else
+computeWorker[i].postMessage({workerID:i,startLine:startLine/scaleFactor,canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0});}}}
 if((workersRunning==0)&&(rotating==1))
 rotatePalette(-1);else
 requestAnimationFrame(drawMandel);}
