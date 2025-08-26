@@ -84,6 +84,22 @@ let wasm_bindgen;
      * @param {number} screen_y
      * @param {number} zoom
      * @param {number} iter_max
+     * @param {number} _block_size
+     * @returns {MandelSegmentResultOptimized}
+     */
+    __exports.mandel_compute_large_segment_with_smooth_optimized = function(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, _block_size) {
+        const ret = wasm.mandel_compute_large_segment_with_smooth_optimized(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, _block_size);
+        return MandelSegmentResultOptimized.__wrap(ret);
+    };
+
+    /**
+     * @param {number} start_line
+     * @param {number} segment_height
+     * @param {number} canvas_width
+     * @param {number} screen_x
+     * @param {number} screen_y
+     * @param {number} zoom
+     * @param {number} iter_max
      * @param {boolean} smooth
      * @param {number} _block_size
      * @returns {Uint8Array}

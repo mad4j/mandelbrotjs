@@ -4,6 +4,7 @@ declare namespace wasm_bindgen {
 	export function mandel_one_shot(x_norm: number, y_norm: number, iter_max: number, smooth: boolean): MandelComputeResult;
 	export function mandel_compute_segment_optimized(start_line: number, segment_height: number, canvas_width: number, screen_x: number, screen_y: number, zoom: number, iter_max: number, smooth: boolean, block_size: number): Uint8Array;
 	export function mandel_compute_segment_with_smooth_optimized(start_line: number, segment_height: number, canvas_width: number, screen_x: number, screen_y: number, zoom: number, iter_max: number, block_size: number): MandelSegmentResultOptimized;
+	export function mandel_compute_large_segment_with_smooth_optimized(start_line: number, segment_height: number, canvas_width: number, screen_x: number, screen_y: number, zoom: number, iter_max: number, _block_size: number): MandelSegmentResultOptimized;
 	export function mandel_compute_large_segment_optimized(start_line: number, segment_height: number, canvas_width: number, screen_x: number, screen_y: number, zoom: number, iter_max: number, smooth: boolean, _block_size: number): Uint8Array;
 	export class MandelComputeResult {
 	  private constructor();
@@ -41,6 +42,7 @@ declare interface InitOutput {
   readonly mandelsegmentresultoptimized_mandel_data: (a: number) => [number, number];
   readonly mandelsegmentresultoptimized_smooth_data: (a: number) => [number, number];
   readonly mandel_compute_segment_with_smooth_optimized: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => number;
+  readonly mandel_compute_large_segment_with_smooth_optimized: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => number;
   readonly mandel_compute_large_segment_optimized: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
   readonly __wbg_mandelsegmentresultoptimized_free: (a: number, b: number) => void;
   readonly __wbindgen_export_0: WebAssembly.Table;

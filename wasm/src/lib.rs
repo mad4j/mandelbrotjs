@@ -338,7 +338,83 @@ pub fn mandel_compute_segment_with_smooth_optimized(
     })
 }
 
-// Enhanced function for processing large image segments efficiently
+// Enhanced function for processing large image segments efficiently with smooth rendering
+// Optimized for minimal JS-WASM boundary crossings with vectorized processing
+#[wasm_bindgen]
+pub fn mandel_compute_large_segment_with_smooth_optimized(
+    start_line: i32,
+    segment_height: i32,
+    canvas_width: i32,
+    screen_x: f64,
+    screen_y: f64,
+    zoom: f64,
+    iter_max: i32,
+    _block_size: i32,
+) -> MandelSegmentResultOptimized {
+    let total_size = (canvas_width * segment_height) as usize;
+    
+    // Use optimized processing for large segments with smooth rendering
+    MANDEL_BUFFER.with(|mandel_buffer| {
+        SMOOTH_BUFFER.with(|smooth_buffer| {
+            let mut mandel_buf = mandel_buffer.borrow_mut();
+            let mut smooth_buf = smooth_buffer.borrow_mut();
+            
+            if mandel_buf.len() < total_size {
+                mandel_buf.resize(total_size, 0);
+            }
+            if smooth_buf.len() < total_size {
+                smooth_buf.resize(total_size, 0);
+            }
+            
+            // Process in larger blocks for better cache performance with large segments
+            let processing_block_size = if segment_height > 300 { 4 } else { 2 };
+            
+            let mut y = 0;
+            while y < segment_height {
+                let y_end = std::cmp::min(y + processing_block_size, segment_height);
+                let y_norm_base = (start_line as f64 - screen_y) / zoom;
+                
+                for current_y in y..y_end {
+                    let y_norm = y_norm_base + (current_y as f64 / zoom);
+                    let y_offset = (current_y * canvas_width) as usize;
+                    
+                    // Vectorized processing across the width (8 pixels at once)
+                    let mut x = 0;
+                    while x < canvas_width {
+                        let x_end = std::cmp::min(x + 8, canvas_width);
+                        
+                        for current_x in x..x_end {
+                            let x_norm = (current_x as f64 - screen_x) / zoom;
+                            let (iteration, smooth_offset) = mandel_point_with_smooth_optimized(x_norm, y_norm, iter_max);
+                            
+                            let result_iteration = if iteration == iter_max {
+                                255
+                            } else {
+                                (iteration % 255) as u8
+                            };
+                            
+                            let smooth_offset_u8 = smooth_offset as u8;
+                            let index = y_offset + current_x as usize;
+                            
+                            mandel_buf[index] = result_iteration;
+                            smooth_buf[index] = smooth_offset_u8;
+                        }
+                        x = x_end;
+                    }
+                }
+                y = y_end;
+            }
+            
+            // Return result with optimized data
+            MandelSegmentResultOptimized {
+                mandel_data: mandel_buf[0..total_size].to_vec(),
+                smooth_data: smooth_buf[0..total_size].to_vec(),
+            }
+        })
+    })
+}
+
+// Enhanced function for processing large image segments efficiently (non-smooth)
 // Optimized for minimal JS-WASM boundary crossings with vectorized processing
 #[wasm_bindgen]
 pub fn mandel_compute_large_segment_optimized(
