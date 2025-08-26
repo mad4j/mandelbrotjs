@@ -62,13 +62,29 @@ pub fn mandel_generate_image(
                 
                 let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
                 
-                // Map iteration count to grayscale values for direct image display
+                // Map iteration count to grayscale values with better contrast
                 let result_value = if iteration == max_iterations {
                     0  // Interior points are black (0)
                 } else {
-                    // Map iteration count to grayscale: faster escape = brighter
-                    let normalized = (iteration as f64 / max_iterations as f64 * 255.0) as u8;
-                    255 - normalized  // Invert so that slower escape = darker
+                    // Improved mapping for better black-white palette distribution
+                    let normalized = iteration as f64 / max_iterations as f64;
+                    
+                    // Apply logarithmic scaling for better visual contrast
+                    // This spreads out the lower iteration values over more of the grayscale range
+                    let log_normalized = if normalized > 0.0 {
+                        (1.0 + normalized.ln()) / (1.0 + 1.0_f64.ln()).max(1.0)
+                    } else {
+                        0.0
+                    };
+                    
+                    // Apply power curve for enhanced contrast in boundary regions
+                    let enhanced = log_normalized.powf(0.7);
+                    
+                    // Map to full 0-255 range with proper clamping
+                    let grayscale = (enhanced * 255.0).clamp(0.0, 255.0) as u8;
+                    
+                    // Invert so that fast escape = bright (white), slow escape = dark (toward black)
+                    255 - grayscale
                 };
                 
                 // Debug first few pixels
