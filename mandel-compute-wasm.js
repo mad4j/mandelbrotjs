@@ -87,8 +87,9 @@ function wasmMandelCompute(e) {
         const startTime = performance.now();
         let mandelData, smoothMandel;
         
-        // Use large segment optimization for bigger chunks (>200px height)
-        const useLargeSegmentOptimization = segmentHeight > 200 && !smooth;
+        // Use large segment optimization when we have fewer workers (larger segments)
+        // This maintains performance benefits while ensuring consistent rendering
+        const useLargeSegmentOptimization = segmentHeight >= 200 && !smooth;
         
         if (smooth) {
             const result = wasmModule.mandel_compute_segment_with_smooth_optimized(
