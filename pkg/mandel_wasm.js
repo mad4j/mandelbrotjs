@@ -40,11 +40,10 @@ let wasm_bindgen;
      * @param {number} width
      * @param {number} height
      * @param {number} start_line
-     * @param {number} canvas_height
      * @returns {Uint8Array}
      */
-    __exports.mandel_generate_image = function(screen_x, screen_y, zoom, max_iterations, width, height, start_line, canvas_height) {
-        const ret = wasm.mandel_generate_image(screen_x, screen_y, zoom, max_iterations, width, height, start_line, canvas_height);
+    __exports.mandel_generate_image = function(screen_x, screen_y, zoom, max_iterations, width, height, start_line) {
+        const ret = wasm.mandel_generate_image(screen_x, screen_y, zoom, max_iterations, width, height, start_line);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;

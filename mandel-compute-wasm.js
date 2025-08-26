@@ -94,11 +94,8 @@ function wasmMandelCompute(e) {
     try {
         const startTime = performance.now();
         
-        // Pass the original coordinate parameters directly to Rust
-        // Let Rust handle the coordinate transformation like the original implementation
-        const canvasHeight = canvasWidth * 2; // Based on mandel-workers.js: canvasHeight=600*2
         console.log(`WASM params: screenX=${screenX}, screenY=${screenY}, zoom=${zoom}, startLine=${startLine}, segmentHeight=${segmentHeight}, canvasWidth=${canvasWidth}`);
-        const imageData = wasmModule.mandel_generate_image(screenX, screenY, zoom, iter_max, canvasWidth, segmentHeight, startLine, canvasHeight);
+        const imageData = wasmModule.mandel_generate_image(screenX, screenY, zoom, iter_max, canvasWidth, segmentHeight, startLine);
         const mandelData = new Uint8Array(imageData);
         
         // No smooth data in simplified implementation

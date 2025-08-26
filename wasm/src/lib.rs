@@ -25,7 +25,6 @@ pub fn mandel_generate_image(
     width: i32,
     height: i32,
     start_line: i32,
-    canvas_height: i32,
 ) -> Box<[u8]> {
     let escape_squared = 4.0f64;
     let total_pixels = (width * height) as usize;
@@ -46,22 +45,13 @@ pub fn mandel_generate_image(
             let row_start = (y * width) as usize;
             
             for x in 0..width {
-                // Convert pixel coordinates to complex plane using the exact original formula  
-                // Original: xnorm = (canvasWidth/2 - screenX)/zoom + pixel_offset
-                let canvas_center_x = width as f64 / 2.0;
-                let canvas_center_y = canvas_height as f64 / 2.0; // Use full canvas height
-                
-                // The pixel position in the full canvas coordinate system
-                let full_canvas_y = (y + start_line) as f64;
-                
-                // Apply original coordinate transformation
-                let x_norm = (canvas_center_x - screen_x) / zoom + (x as f64 - canvas_center_x) / zoom;
-                let y_norm = (canvas_center_y - screen_y) / zoom + (full_canvas_y - canvas_center_y) / zoom;
+                // Use original coordinate transformation exactly as in the JavaScript
+                let x_norm = (x as f64 - screen_x) / zoom;
+                let y_norm = ((y + start_line) as f64 - screen_y) / zoom;
                 
                 // Debug first pixel
                 if x == 0 && y == 0 {
-                    log(&format!("First pixel: center=({}, {}), screen=({}, {}), x_norm={}, y_norm={}", 
-                                canvas_center_x, canvas_center_y, screen_x, screen_y, x_norm, y_norm));
+                    log(&format!("First pixel: x_norm={}, y_norm={}", x_norm, y_norm));
                 }
                 
                 let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);

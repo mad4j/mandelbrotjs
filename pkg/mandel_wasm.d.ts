@@ -6,7 +6,7 @@ declare namespace wasm_bindgen {
 	 * Uses the original coordinate system: screen coordinates, zoom level, max iterations and image dimensions  
 	 * start_line parameter defines the vertical offset for this image segment
 	 */
-	export function mandel_generate_image(screen_x: number, screen_y: number, zoom: number, max_iterations: number, width: number, height: number, start_line: number, canvas_height: number): Uint8Array;
+	export function mandel_generate_image(screen_x: number, screen_y: number, zoom: number, max_iterations: number, width: number, height: number, start_line: number): Uint8Array;
 	
 }
 
@@ -14,7 +14,7 @@ declare type InitInput = RequestInfo | URL | Response | BufferSource | WebAssemb
 
 declare interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly mandel_generate_image: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+  readonly mandel_generate_image: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
   readonly __wbindgen_export_0: WebAssembly.Table;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_start: () => void;
