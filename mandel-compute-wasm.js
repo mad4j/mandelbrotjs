@@ -91,11 +91,16 @@ function wasmMandelCompute(e) {
     const zoom = e.data.zoom;
     const iter_max = e.data.iterations;
     
+    // Calculate complex plane center coordinates from pixel coordinates
+    const canvasHeight = e.data.canvasHeight || canvasWidth; // Assume square canvas if not provided
+    const center_x = (canvasWidth/2 - screenX) / zoom;
+    const center_y = (canvasHeight/2 - screenY) / zoom;
+    
     try {
         const startTime = performance.now();
         
-        console.log(`WASM params: screenX=${screenX}, screenY=${screenY}, zoom=${zoom}, startLine=${startLine}, segmentHeight=${segmentHeight}, canvasWidth=${canvasWidth}`);
-        const imageData = wasmModule.mandel_generate_image(screenX, screenY, zoom, iter_max, canvasWidth, segmentHeight, startLine);
+        console.log(`WASM params: center_x=${center_x}, center_y=${center_y}, zoom=${zoom}, startLine=${startLine}, segmentHeight=${segmentHeight}, canvasWidth=${canvasWidth}`);
+        const imageData = wasmModule.mandel_generate_image(center_x, center_y, zoom, iter_max, canvasWidth, segmentHeight, startLine);
         const mandelData = new Uint8Array(imageData);
         
         // No smooth data in simplified implementation

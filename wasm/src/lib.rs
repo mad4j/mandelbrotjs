@@ -14,12 +14,13 @@ thread_local! {
 }
 
 /// Single unified function for Mandelbrot image generation
-/// Uses the original coordinate system: screen coordinates, zoom level, max iterations and image dimensions  
+/// Uses center coordinates in the complex plane, zoom level, max iterations and image dimensions  
 /// start_line parameter defines the vertical offset for this image segment
+/// width is the canvas width, height is the segment height
 #[wasm_bindgen]
 pub fn mandel_generate_image(
-    screen_x: f64,
-    screen_y: f64,
+    center_x: f64,
+    center_y: f64,
     zoom: f64,
     max_iterations: i32,
     width: i32,
@@ -30,8 +31,8 @@ pub fn mandel_generate_image(
     let total_pixels = (width * height) as usize;
     
     // Debug logging for the first call
-    log(&format!("WASM: screen_x={}, screen_y={}, zoom={}, start_line={}, width={}, height={}", 
-                 screen_x, screen_y, zoom, start_line, width, height));
+    log(&format!("WASM: center_x={}, center_y={}, zoom={}, start_line={}, width={}, height={}", 
+                 center_x, center_y, zoom, start_line, width, height));
     
     // Use thread-local buffer for efficient memory management
     IMAGE_BUFFER.with(|buffer| {
@@ -45,13 +46,18 @@ pub fn mandel_generate_image(
             let row_start = (y * width) as usize;
             
             for x in 0..width {
-                // Use original coordinate transformation exactly as in the JavaScript
-                let x_norm = (x as f64 - screen_x) / zoom;
-                let y_norm = ((y + start_line) as f64 - screen_y) / zoom;
+                // Convert pixel coordinates to complex plane coordinates
+                // The full canvas coordinates for this pixel are (x, y + start_line)
+                let canvas_x = x as f64;
+                let canvas_y = (y + start_line) as f64;
+                
+                // Convert to complex plane coordinates centered on center_x, center_y
+                let x_norm = center_x + (canvas_x - width as f64 / 2.0) / zoom;
+                let y_norm = center_y + (canvas_y - width as f64 / 2.0) / zoom; // Use width for canvas height (square canvas)
                 
                 // Debug first pixel
                 if x == 0 && y == 0 {
-                    log(&format!("First pixel: x_norm={}, y_norm={}", x_norm, y_norm));
+                    log(&format!("First pixel: canvas_pos=({}, {}), x_norm={}, y_norm={}", canvas_x, canvas_y, x_norm, y_norm));
                 }
                 
                 let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);

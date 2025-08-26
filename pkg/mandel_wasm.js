@@ -31,10 +31,11 @@ let wasm_bindgen;
     }
     /**
      * Single unified function for Mandelbrot image generation
-     * Uses the original coordinate system: screen coordinates, zoom level, max iterations and image dimensions
+     * Uses center coordinates in the complex plane, zoom level, max iterations and image dimensions
      * start_line parameter defines the vertical offset for this image segment
-     * @param {number} screen_x
-     * @param {number} screen_y
+     * width is the canvas width, height is the segment height
+     * @param {number} center_x
+     * @param {number} center_y
      * @param {number} zoom
      * @param {number} max_iterations
      * @param {number} width
@@ -42,8 +43,8 @@ let wasm_bindgen;
      * @param {number} start_line
      * @returns {Uint8Array}
      */
-    __exports.mandel_generate_image = function(screen_x, screen_y, zoom, max_iterations, width, height, start_line) {
-        const ret = wasm.mandel_generate_image(screen_x, screen_y, zoom, max_iterations, width, height, start_line);
+    __exports.mandel_generate_image = function(center_x, center_y, zoom, max_iterations, width, height, start_line) {
+        const ret = wasm.mandel_generate_image(center_x, center_y, zoom, max_iterations, width, height, start_line);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
