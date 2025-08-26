@@ -1,8 +1,9 @@
-// High-performance Rust WebAssembly wrapper for mandel-compute.js
-// This module provides the same interface as mandel-compute.js but uses Rust+WASM for better performance
+// High-performance Rust WebAssembly implementation for mandel-compute
+// This module uses Rust+WASM as the only computation engine
 
 let wasmModule = null;
 let wasmInitialized = false;
+let pendingMessages = [];
 
 // Initialize WebAssembly module
 function initWasm() {
@@ -19,9 +20,16 @@ function initWasm() {
                     wasmModule = wasm_bindgen;
                     wasmInitialized = true;
                     console.log('Rust WebAssembly module loaded successfully');
+                    
+                    // Process any pending messages
+                    while (pendingMessages.length > 0) {
+                        const e = pendingMessages.shift();
+                        wasmMandelCompute(e);
+                    }
+                    
                     resolve();
                 }).catch(error => {
-                    console.warn('Failed to initialize WebAssembly module:', error);
+                    console.error('Failed to initialize WebAssembly module:', error);
                     wasmInitialized = false;
                     reject(error);
                 });
@@ -29,120 +37,18 @@ function initWasm() {
                 throw new Error('wasm_bindgen not available');
             }
         } catch (error) {
-            console.warn('Failed to load WebAssembly module, falling back to JavaScript:', error);
+            console.error('Failed to load WebAssembly module:', error);
             wasmInitialized = false;
             reject(error);
         }
     });
 }
 
-// Fallback JavaScript implementation (same as original mandel-compute.js)
-function jsMandelCompute(e) {
-    const startTime = performance.now();
-    const oneShot = e.data.oneShot;
-    const screenX = e.data.screenX;
-    const screenY = e.data.screenY;
-    const zoom = e.data.zoom;
-    const iter_max = e.data.iterations;
-    var smooth = 0;
-    var escapeSquared = 4;
-    var firstIteration = -1;
-    
-    if (e.data.smooth == 1) {
-        firstIteration = -3;
-        escapeSquared = 256;
-        smooth = 1;
-        smoothOffset = 0.0;
-        var log2 = Math.log2(2);
-    }
-    
-    if (oneShot == 1) {
-        var xStart = e.data.x;
-        var yStart = e.data.y;
-        var segmentHeight = yStart + 1;
-        var canvasWidth = xStart + 1;
-        var startLine = 0;
-        var lblockSize = 1;
-    } else {
-        var mandelData = new Uint8Array(e.data.mandelBuffer);
-        var smoothMandel = new Uint8Array(e.data.smoothMandel);
-        var startLine = e.data.startLine;
-        var workerID = e.data.workerID;
-        var blockSize = e.data.blockSize;
-        var canvasWidth = e.data.canvasWidth;
-        var segmentHeight = e.data.segmentHeight;
-        var lblockSize = blockSize == 1 ? 1 : blockSize / 2;
-        var lineCounter = 0;
-        var xStart = 0;
-        var yStart = 0;
-    }
-    
-    for (let y = yStart; y < segmentHeight; y += lblockSize) {
-        let ynorm = (y + startLine - screenY) / zoom;
-        for (let x = xStart; x < canvasWidth; x += lblockSize) {
-            let xnorm = (x - screenX) / zoom;
-            let iteration = firstIteration;
-            
-            if ((xnorm > -0.5) && (xnorm < 0.25) && (ynorm > -0.5) && (ynorm < 0.5))
-                iteration = iter_max;
-            else {
-                let zr = 0.0;
-                let zi = 0.0;
-                var zrSquared = 0.0;
-                var ziSquared = 0.0;
-                while ((zrSquared + ziSquared < escapeSquared) && (iteration < iter_max)) {
-                    zrSquared = zr * zr;
-                    ziSquared = zi * zi;
-                    let zr_prev = zr;
-                    zr = zrSquared - ziSquared + xnorm;
-                    zi = (zr_prev * 2) * zi + ynorm;
-                    iteration++;
-                }
-            }
-            
-            if (oneShot) {
-                oneShotResult = iteration;
-                self.postMessage({ oneShotResult: oneShotResult, usedWasm: false });
-                return 1;
-            }
-            
-            if (smooth == 1) {
-                smoothOffset = (Math.log2(Math.log2(Math.sqrt(zrSquared + ziSquared)) / log2) - 2) * 255;
-                smoothMandel[x + y * canvasWidth] = Math.floor(smoothOffset);
-            }
-            
-            if (iteration == iter_max)
-                iteration = 255;
-            else
-                iteration = iteration % 255;
-            mandelData[x + y * canvasWidth] = iteration;
-        }
-        lineCounter++;
-        if ((blockSize == 1) && (lineCounter == 20)) {
-            self.postMessage({ lineCount: y, workerID: workerID });
-            lineCounter = 0;
-        }
-    }
-    
-    const computeTime = performance.now() - startTime;
-    console.log(`JS computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
-    
-    self.postMessage({
-        finished: 1,
-        mandel: mandelData.buffer,
-        workerID: workerID,
-        smooth: smooth,
-        smoothMandel: smoothMandel.buffer,
-        usedWasm: false,
-        computeTime: computeTime
-    }, [mandelData.buffer], [smoothMandel.buffer]);
-}
-
-// WebAssembly-enhanced implementation
+// WebAssembly implementation
 function wasmMandelCompute(e) {
     if (!wasmInitialized || !wasmModule) {
-        // Fallback to JavaScript implementation
-        jsMandelCompute(e);
+        // Queue the message for when WASM is ready
+        pendingMessages.push(e);
         return;
     }
     
@@ -165,8 +71,7 @@ function wasmMandelCompute(e) {
             self.postMessage({ oneShotResult: oneShotResult, usedWasm: true });
             return;
         } catch (error) {
-            console.warn('WASM one-shot computation failed, falling back to JS:', error);
-            jsMandelCompute(e);
+            console.error('WASM one-shot computation failed:', error);
             return;
         }
     }
@@ -199,13 +104,7 @@ function wasmMandelCompute(e) {
         }
         
         const computeTime = performance.now() - startTime;
-        console.log(`WASM computation took ${computeTime.toFixed(2)}ms for worker ${workerID} (optimized)`);
-        
-        // Send periodic progress updates for fine rendering
-        if (blockSize == 1) {
-            // For now, we'll send the full result since WASM computes the entire segment at once
-            // In the future, we could modify the Rust code to send incremental updates
-        }
+        console.log(`WASM computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
         
         self.postMessage({
             finished: 1,
@@ -215,32 +114,21 @@ function wasmMandelCompute(e) {
             smoothMandel: smoothMandel.buffer,
             usedWasm: true,
             computeTime: computeTime
-        }, [mandelData.buffer], [smoothMandel.buffer]);
+        }, [mandelData.buffer, smoothMandel.buffer]);
         
     } catch (error) {
-        console.warn('WASM segment computation failed, falling back to JS:', error);
-        jsMandelCompute(e);
+        console.error('WASM segment computation failed:', error);
     }
 }
-
-// Global variable to track actual usage
-let actuallyUsingWasm = false;
 
 // Main message handler
 self.onmessage = function(e) {
     wasmMandelCompute(e);
 };
 
-// Initialize WASM on worker startup and report status
+// Initialize WASM on worker startup
 initWasm().then(() => {
-    if (wasmInitialized) {
-        actuallyUsingWasm = true;
-        console.log('WASM worker ready - will use WebAssembly for computations');
-    } else {
-        actuallyUsingWasm = false;
-        console.log('WASM worker ready - will use JavaScript fallback for computations');
-    }
+    console.log('WASM worker ready - using WebAssembly for computations');
 }).catch(error => {
-    actuallyUsingWasm = false;
-    console.warn('WASM worker initialization failed, using JavaScript fallback:', error);
+    console.error('WASM worker initialization failed:', error);
 });
