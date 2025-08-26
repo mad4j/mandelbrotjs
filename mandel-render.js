@@ -1,102 +1,54 @@
-// Modern WASM-based rendering worker with unified pipeline
-// Migrates RGBA generation to WASM and eliminates dual output paths
+// Legacy JavaScript renderer - deprecated in favor of WASM unified rendering
+// This file is kept for compatibility but should not be used when unified WASM rendering is enabled
 
-// Check if OffscreenCanvas is available
-const supportsOffscreenCanvas = typeof OffscreenCanvas !== 'undefined';
+console.warn('mandel-render.js: Legacy JavaScript renderer loaded - this should not be used with WASM unified rendering');
 
 self.onmessage = function(e) {
+    console.warn('mandel-render.js: JavaScript rendering called - this indicates a fallback from WASM unified rendering');
+    
     const startTime = performance.now();
     const blockSize = e.data.blockSize;
     const arrayWidth = e.data.arrayWidth;
     const workerID = e.data.workerID;
     const segmentHeight = e.data.segmentHeight || (blockSize == 1 ? 300 : 150);
     
-    // Legacy variables - preserved for compatibility but simplified usage
+    // Legacy variables - simplified for fallback usage
     let mandel = new Uint8Array(e.data.mandel);
-    let smoothMandel = new Uint8Array(e.data.smoothMandel);
     
-    // Generate RGBA data directly from iteration data (no WASM needed for this step)
-    const rgbaData = generateRGBAFromIterationData(mandel, arrayWidth, segmentHeight, blockSize);
+    // Simplified RGBA generation (single path, no dual OffscreenCanvas vs pixelsBuffer)
+    const rgbaData = new Uint8Array(arrayWidth * segmentHeight * 4);
+    const lblockSize = blockSize == 1 ? 1 : blockSize / 2;
     
-    if (supportsOffscreenCanvas) {
-        // Unified OffscreenCanvas path
-        const canvas = new OffscreenCanvas(arrayWidth, segmentHeight);
-        const ctx = canvas.getContext('2d');
-        
-        // Create ImageData from RGBA buffer
-        const imageData = new ImageData(
-            new Uint8ClampedArray(rgbaData),
-            arrayWidth,
-            segmentHeight
-        );
-        
-        // Put imageData to canvas and convert to ImageBitmap
-        ctx.putImageData(imageData, 0, 0);
-        
-        createImageBitmap(canvas).then(imageBitmap => {
-            const renderTime = performance.now() - startTime;
-            console.log(`Modern render worker ${workerID} completed in ${renderTime.toFixed(2)}ms`);
+    // Simple grayscale rendering with pixel doubling
+    for (let y = 0; y < segmentHeight; y += lblockSize) {
+        for (let x = 0; x < arrayWidth; x += lblockSize) {
+            const sourceIndex = x + y * arrayWidth;
+            const grayscale = sourceIndex < mandel.length ? mandel[sourceIndex] : 0;
             
-            // Simplified postMessage - no legacy buffer transfers
-            self.postMessage({
-                imageBitmap: imageBitmap,
-                workerID: workerID,
-                blockSize: blockSize,
-                useOffscreenCanvas: true,
-                usedWasm: false, // This is JS-based but modernized
-                renderTime: renderTime
-            }, [imageBitmap]);
-        }).catch(error => {
-            console.error('Failed to create ImageBitmap:', error);
-            // Fall back to pixel buffer approach
-            fallbackToPixelBuffer();
-        });
-    } else {
-        // Fallback: send RGBA pixels buffer directly
-        fallbackToPixelBuffer();
-    }
-    
-    function generateRGBAFromIterationData(iterationData, width, height, blockSize) {
-        // Create RGBA buffer (4 bytes per pixel)
-        const rgbaBuffer = new Uint8Array(width * height * 4);
-        const lblockSize = blockSize == 1 ? 1 : blockSize / 2;
-        
-        // Convert grayscale iteration values to RGBA with pixel doubling support
-        for (let y = 0; y < height; y += lblockSize) {
-            for (let x = 0; x < width; x += lblockSize) {
-                // Get the source iteration value
-                const sourceIndex = x + y * width;
-                const grayscale = sourceIndex < iterationData.length ? iterationData[sourceIndex] : 0;
-                
-                // Apply pixel doubling (lblockSize)
-                for (let dy = 0; dy < lblockSize && y + dy < height; dy++) {
-                    for (let dx = 0; dx < lblockSize && x + dx < width; dx++) {
-                        const targetIndex = ((y + dy) * width + (x + dx)) * 4;
-                        if (targetIndex < rgbaBuffer.length - 3) {
-                            rgbaBuffer[targetIndex] = grayscale;     // R
-                            rgbaBuffer[targetIndex + 1] = grayscale; // G
-                            rgbaBuffer[targetIndex + 2] = grayscale; // B
-                            rgbaBuffer[targetIndex + 3] = 255;       // A
-                        }
+            for (let dy = 0; dy < lblockSize && y + dy < segmentHeight; dy++) {
+                for (let dx = 0; dx < lblockSize && x + dx < arrayWidth; dx++) {
+                    const targetIndex = ((y + dy) * arrayWidth + (x + dx)) * 4;
+                    if (targetIndex < rgbaData.length - 3) {
+                        rgbaData[targetIndex] = grayscale;     // R
+                        rgbaData[targetIndex + 1] = grayscale; // G
+                        rgbaData[targetIndex + 2] = grayscale; // B
+                        rgbaData[targetIndex + 3] = 255;       // A
                     }
                 }
             }
         }
-        
-        return rgbaBuffer;
     }
     
-    function fallbackToPixelBuffer() {
-        const renderTime = performance.now() - startTime;
-        console.log(`Modern render worker ${workerID} completed in ${renderTime.toFixed(2)}ms (pixel buffer fallback)`);
-        
-        self.postMessage({
-            pixelsBuffer: rgbaData.buffer,
-            workerID: workerID,
-            blockSize: blockSize,
-            useOffscreenCanvas: false,
-            usedWasm: false,
-            renderTime: renderTime
-        }, [rgbaData.buffer]);
-    }
+    const renderTime = performance.now() - startTime;
+    console.log(`Legacy JS render worker ${workerID} completed in ${renderTime.toFixed(2)}ms`);
+    
+    // Return simplified format (single path)
+    self.postMessage({
+        pixelsBuffer: rgbaData.buffer,
+        workerID: workerID,
+        blockSize: blockSize,
+        useOffscreenCanvas: false,
+        usedWasm: false,
+        renderTime: renderTime
+    }, [rgbaData.buffer]);
 };

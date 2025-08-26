@@ -18,8 +18,11 @@ var workers = (function() {
 
 var blockSize=new Uint8Array(workers);
 for(var i=0; i<workers; i++) { blockSize[i]=16; }
-var colours=new Uint32Array(256);var vga=new Uint32Array(256);const paletteCount=13;var currentPalette=-1;var currentRotation=0;var rotating=0;var renderCount=0;var travelling=0;var movingToSaved=0;var destX=0;var destY=0;var destZoom=0;var destIters=0;var computeWorker=new Array();var computeWorkerRunning=new Uint8Array(workers);var renderWorker=new Array();var renderWorkerRunning=new Uint8Array(workers);var needToRun=new Uint8Array(workers);var finished=new Uint8Array(workers);var timesTaken=new Array(20);var timesTakenSorted=new Array(20);var benchmarkTime=2;
-for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;const chunkHeight=canvasHeight/workers;var needRedraw=0;var needRecompute=1;var showAxes=0;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var smoothBox=document.getElementById("smooth");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});offScreen.width=canvasWidth;offScreen.height=canvasHeight;var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});coarse.width=coarseWidth;coarse.height=coarseHeight;var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();var mandel=new Array();var smoothMandel=new Array();var percentDone=new Array();for(i=0;i<workers;i++){computeWorkerRunning[i]=0;renderWorkerRunning[i]=0;offScreenSegment[i]=document.createElement('canvas');offScreenSegmentCtx[i]=offScreenSegment[i].getContext("2d",{alpha:false});offScreenSegment[i].width=canvasWidth;offScreenSegment[i].height=canvasHeight/workers;mSegment[i]=offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,canvasHeight/workers);mdSegment[i]=new Uint8ClampedArray(canvasWidth*canvasHeight/workers*4);mdSegment[i].set(mSegment[i].data);coarseSegment[i]=document.createElement('canvas');coarseSegmentCtx[i]=coarseSegment[i].getContext("2d",{alpha:false});coarseSegment[i].width=coarseWidth;coarseSegment[i].height=coarseHeight/workers;mCoarseSegment[i]=coarseSegmentCtx[i].getImageData(0,0,coarseWidth,coarseHeight/workers);mdCoarseSegment[i]=mCoarseSegment[i].data;mandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));}
+var colours=new Uint32Array(256);var vga=new Uint32Array(256);const paletteCount=13;var currentPalette=-1;var currentRotation=0;var rotating=0;var renderCount=0;var travelling=0;var movingToSaved=0;var destX=0;var destY=0;var destZoom=0;var destIters=0;var computeWorker=new Array();var computeWorkerRunning=new Uint8Array(workers);var needToRun=new Uint8Array(workers);var finished=new Uint8Array(workers);var timesTaken=new Array(20);var timesTakenSorted=new Array(20);var benchmarkTime=2;
+// Legacy variables - kept for compatibility but no longer populated with WASM unified rendering
+var mandel=new Array();var smoothMandel=new Array();var percentDone=new Array();
+for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;const chunkHeight=canvasHeight/workers;var needRedraw=0;var needRecompute=1;var showAxes=0;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var smoothBox=document.getElementById("smooth");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});offScreen.width=canvasWidth;offScreen.height=canvasHeight;var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});coarse.width=coarseWidth;coarse.height=coarseHeight;var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();
+for(i=0;i<workers;i++){computeWorkerRunning[i]=0;offScreenSegment[i]=document.createElement('canvas');offScreenSegmentCtx[i]=offScreenSegment[i].getContext("2d",{alpha:false});offScreenSegment[i].width=canvasWidth;offScreenSegment[i].height=canvasHeight/workers;mSegment[i]=offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,canvasHeight/workers);mdSegment[i]=new Uint8ClampedArray(canvasWidth*canvasHeight/workers*4);mdSegment[i].set(mSegment[i].data);coarseSegment[i]=document.createElement('canvas');coarseSegmentCtx[i]=coarseSegment[i].getContext("2d",{alpha:false});coarseSegment[i].width=coarseWidth;coarseSegment[i].height=coarseHeight/workers;mCoarseSegment[i]=coarseSegmentCtx[i].getImageData(0,0,coarseWidth,coarseHeight/workers);mdCoarseSegment[i]=mCoarseSegment[i].data;mandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));percentDone[i]=0;}
 var zoomSlider;var oldMouseX=-1;var oldMouseX=-1;var worker=0;mc.addEventListener("touchstart",touchStart,false);mc.addEventListener("touchmove",touchMove,false);mc.addEventListener("touchend",touchEnd,false);window.addEventListener("resize",setViewport,false);function setViewport()
 {var ww=window.screen.width;var cw=canvasWidth/2+50;if(ww<cw){var ratio=ww/cw;viewportTag.setAttribute("content","width="+ww+",initial-scale="+ratio);document.body.style.fontSize=Math.floor(70/ratio)+"%";var checkBoxes=document.querySelectorAll("input[type=checkbox]");var checkBoxCount=checkBoxes.length;for(var i=0;i<checkBoxCount;i++)
 checkBoxes[i].style.transform="scale("+0.7/ratio+")";}
@@ -196,51 +199,64 @@ var onComputeEnded=function(e)
 return 1;}
 var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;
 
-// Handle unified WASM rendering (RGBA data directly from compute worker)
-if(USE_WASM_UNIFIED_RENDERING && e.data.useUnifiedRendering){
-    // WASM generated RGBA data directly - no render step needed
-    var rgbaData=new Uint8ClampedArray(e.data.mandel);
-    
-    if(blockSize[workerID]==1){
-        // Fine rendering - put RGBA data directly to canvas
-        mdSegment[workerID]=rgbaData;
-        finished[workerID]=1;
-        mSegment[workerID].data.set(mdSegment[workerID]);
-        var lstartLine=Math.floor(workerID*chunkHeight);
-        offScreenCtx.putImageData(mSegment[workerID],0,lstartLine);
-    } else {
-        // Coarse rendering - put RGBA data to coarse canvas  
-        mdCoarseSegment[workerID]=rgbaData;
-        mCoarseSegment[workerID].data.set(mdCoarseSegment[workerID]);
-        var lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);
-        coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);
-        mctx.drawImage(coarse,0,0);
-    }
-    
-    // Skip render worker entirely
-    workersRunning--;
+// Always use unified WASM rendering - RGBA data directly from compute worker
+var rgbaData=new Uint8ClampedArray(e.data.mandel);
+
+if(blockSize[workerID]==1){
+    // Fine rendering - put RGBA data directly to canvas
+    mdSegment[workerID]=rgbaData;
+    finished[workerID]=1;
+    mSegment[workerID].data.set(mdSegment[workerID]);
+    var lstartLine=Math.floor(workerID*chunkHeight);
+    offScreenCtx.putImageData(mSegment[workerID],0,lstartLine);
 } else {
-    // Traditional pipeline: iteration data needs rendering step
-    mandel[workerID]=new Uint8Array(e.data.mandel);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);while(renderWorkerRunning[workerID]!=0){console.log("Waiting for worker to end");}
-    if(!renderWorker[workerID]){renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;}
-    renderWorkerRunning[workerID]=1;if(blockSize[workerID]==1)
-    renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[workerID].buffer},[mandel[workerID].buffer],[smoothMandel[workerID].buffer],[mdSegment[workerID].buffer]);else
-    renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdCoarseSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,segmentHeight:chunkHeight/scaleFactor,smooth:smooth,smoothMandel:smoothMandel[workerID]},[mandel[workerID].buffer],[mdCoarseSegment[workerID].buffer],[smoothMandel[workerID].buffer]);
+    // Coarse rendering - put RGBA data to coarse canvas  
+    mdCoarseSegment[workerID]=rgbaData;
+    mCoarseSegment[workerID].data.set(mdCoarseSegment[workerID]);
+    var lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);
+    coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);
+    mctx.drawImage(coarse,0,0);
+}
+
+// No render step needed - compute worker provided RGBA directly
+workersRunning--;
+
+// Check if all workers are done (moved from onRenderEnded)
+if(workersRunning==0){
+    var allFinished=true;
+    for(var i=0;i<workers;i++){
+        if(!finished[i]){
+            allFinished=false;
+            break;
+        }
+    }
+    if((!eventOccurred)&&(allFinished)){
+        needRedraw=0;
+        mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);
+        if(!rotating){
+            workingText.style.visibility="hidden";
+            mc.style.borderColor="black";
+            mc.style.outline="5px solid #FFFFFF";
+            if(posterTime!=0){
+                diff=Math.floor((performance.now()-posterTime)/10)/100;
+                posterTime=0;
+                logText.innerHTML="Poster rendered in "+diff+" s";
+            } else {
+                diff=Math.floor((performance.now()-start)/10)/100;
+                logText.innerHTML="Rendered in "+diff+" s";
+                if(typeof showInfoAfterRender==='function'){
+                    showInfoAfterRender(diff*1000);
+                }
+            }
+            updateCoords(canvasWidth/2,canvasHeight/2,"centre");
+        }
+    }
 }
 };
 var onRenderEnded=function(e)
 {var workerID=e.data.workerID;
-
-// Handle both modern WASM render worker and legacy JS render worker responses
-if(e.data.usedWasm){
-    // Modern WASM render worker - no legacy buffer handling needed
-    console.log(`WASM render worker ${workerID} completed${e.data.renderTime ? ` in ${e.data.renderTime.toFixed(2)}ms` : ''}`);
-} else {
-    // Legacy JS render worker - restore mandel and smoothMandel buffers for compatibility
-    if(e.data.mandelBuffer) mandel[workerID]=new Uint8Array(e.data.mandelBuffer);
-    if(e.data.smoothMandel) smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
-}
-
+// Traditional JS render worker logic
+mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
 // Handle ImageBitmap response when OffscreenCanvas is used
 if(e.data.useOffscreenCanvas && e.data.imageBitmap){
     // Handle both fine and coarse rendering correctly
@@ -255,8 +271,8 @@ if(e.data.useOffscreenCanvas && e.data.imageBitmap){
         coarseCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
         mctx.drawImage(coarse,0,0);
     }
-} else if(e.data.pixelsBuffer) {
-    // Fallback to pixel array approach (both legacy and modern WASM fallback)
+} else {
+    // Fallback to original pixel array approach
     if(e.data.blockSize==1)
     mdSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);else
     mdCoarseSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);
@@ -348,14 +364,12 @@ function drawMandel()
 rotationFrameStart=performance.now();if((!startupAnim)&&(!autotuneIterations)&&(iterations!=iterSlider.value)){iterations=Math.floor(iterSlider.value);startRender(1,1);needRedraw=1;}
 for(i=0;i<workers;i++)
 if((blockSize[i]>1)&&(performance.now()>zoomTime+500))
-needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((needToRun[i]==1)&&(!eventOccurred)){if(renderWorkerRunning[i]){continue;}
-if(computeWorkerRunning[i]){continue;}
-if(needRecompute){if(!computeWorker[i]){computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onComputeEnded;}
+needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((needToRun[i]==1)&&(!eventOccurred)){if(computeWorkerRunning[i]){continue;}
+// Always use WASM unified rendering - no separate render step needed
+if(!computeWorker[i]){computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onComputeEnded;}
 workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
-computeWorker[i].postMessage({workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,useUnifiedRendering:USE_WASM_UNIFIED_RENDERING});else
-computeWorker[i].postMessage({workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,useUnifiedRendering:USE_WASM_UNIFIED_RENDERING});}
-else{workersRunning++;if(!renderWorker[i]){renderWorker[i]=new Worker("mandel-render.js");renderWorker[i].onmessage=onRenderEnded;}
-renderWorkerRunning[i]=1;renderWorker[i].postMessage({colours:colours,mandel:mandel[i].buffer,canvasBuffer:mdSegment[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer],[mdSegment[i].buffer]);}}}}
+computeWorker[i].postMessage({workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,useUnifiedRendering:true});else
+computeWorker[i].postMessage({workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,useUnifiedRendering:true});}}}
 if((workersRunning==0)&&(rotating==1))
 rotatePalette(-1);else
 requestAnimationFrame(drawMandel);}
