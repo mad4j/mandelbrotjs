@@ -55,8 +55,7 @@ function wasmMandelCompute(e) {
     const oneShot = e.data.oneShot;
     
     if (oneShot == 1) {
-        // For single point computation, we still need the old interface
-        // This is used for mouse hover information, so let's provide a simple implementation
+        // For single point computation, convert screen to complex plane coordinates
         const x = e.data.x;
         const y = e.data.y;
         const screenX = e.data.screenX;
@@ -70,7 +69,7 @@ function wasmMandelCompute(e) {
         
         try {
             // Generate a 1x1 image for the single point
-            const result = wasmModule.mandel_generate_image(x, y, zoom, iter_max, 1, 1, 0);
+            const result = wasmModule.mandel_generate_image(x_norm, y_norm, zoom, iter_max, 1, 1, 0);
             const imageData = new Uint8Array(result);
             // Convert grayscale back to iteration count approximation
             const oneShotResult = imageData[0] === 255 ? iter_max : imageData[0];
@@ -95,9 +94,13 @@ function wasmMandelCompute(e) {
     try {
         const startTime = performance.now();
         
-        // Use the screen coordinates directly, as in the original implementation
-        // Generate the entire image segment using the new single function with correct start_line
-        const imageData = wasmModule.mandel_generate_image(screenX, screenY, zoom, iter_max, canvasWidth, segmentHeight, startLine);
+        // Calculate the center coordinates in complex plane for this segment
+        // The segment spans from startLine to startLine + segmentHeight in canvas coordinates
+        const centerX = (canvasWidth / 2 - screenX) / zoom;
+        const centerY = (startLine + segmentHeight / 2 - screenY) / zoom;
+        
+        // Generate the entire image segment using the new single function
+        const imageData = wasmModule.mandel_generate_image(centerX, centerY, zoom, iter_max, canvasWidth, segmentHeight, 0);
         const mandelData = new Uint8Array(imageData);
         
         // No smooth data in simplified implementation

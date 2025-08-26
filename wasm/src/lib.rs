@@ -14,17 +14,17 @@ thread_local! {
 }
 
 /// Single unified function for Mandelbrot image generation
-/// Takes screen center coordinates, zoom level, max iterations and image dimensions  
-/// Optionally takes a start_line offset for segment-based computation
+/// Takes center coordinates in the complex plane, zoom level, max iterations and image dimensions  
+/// start_line parameter is not used in this simplified implementation
 #[wasm_bindgen]
 pub fn mandel_generate_image(
-    screen_x: f64,
-    screen_y: f64,
+    center_x: f64,
+    center_y: f64,
     zoom: f64,
     max_iterations: i32,
     width: i32,
     height: i32,
-    start_line: i32,
+    _start_line: i32,
 ) -> Box<[u8]> {
     let escape_squared = 4.0f64;
     let total_pixels = (width * height) as usize;
@@ -38,11 +38,14 @@ pub fn mandel_generate_image(
 
         // Iterate through all pixels to generate the image
         for y in 0..height {
-            let y_norm = ((y + start_line) as f64 - screen_y) / zoom;
             let row_start = (y * width) as usize;
             
             for x in 0..width {
-                let x_norm = (x as f64 - screen_x) / zoom;
+                // Convert pixel coordinates to complex plane coordinates
+                // Pixel (x, y) relative to image center (width/2, height/2)
+                let x_norm = center_x + (x as f64 - width as f64 / 2.0) / zoom;
+                let y_norm = center_y + (y as f64 - height as f64 / 2.0) / zoom;
+                
                 let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
                 
                 // Map iteration count to the same values as the original implementation

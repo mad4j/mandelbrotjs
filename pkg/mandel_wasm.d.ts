@@ -3,10 +3,10 @@ declare namespace wasm_bindgen {
 	/* eslint-disable */
 	/**
 	 * Single unified function for Mandelbrot image generation
-	 * Takes screen center coordinates, zoom level, max iterations and image dimensions  
-	 * Optionally takes a start_line offset for segment-based computation
+	 * Takes center coordinates in the complex plane, zoom level, max iterations and image dimensions  
+	 * start_line parameter is not used in this simplified implementation
 	 */
-	export function mandel_generate_image(screen_x: number, screen_y: number, zoom: number, max_iterations: number, width: number, height: number, start_line: number): Uint8Array;
+	export function mandel_generate_image(center_x: number, center_y: number, zoom: number, max_iterations: number, width: number, height: number, _start_line: number): Uint8Array;
 	
 }
 
