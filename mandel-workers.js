@@ -230,8 +230,17 @@ if(USE_WASM_UNIFIED_RENDERING && e.data.useUnifiedRendering){
 };
 var onRenderEnded=function(e)
 {var workerID=e.data.workerID;
-// Traditional JS render worker logic
-mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
+
+// Handle both modern WASM render worker and legacy JS render worker responses
+if(e.data.usedWasm){
+    // Modern WASM render worker - no legacy buffer handling needed
+    console.log(`WASM render worker ${workerID} completed${e.data.renderTime ? ` in ${e.data.renderTime.toFixed(2)}ms` : ''}`);
+} else {
+    // Legacy JS render worker - restore mandel and smoothMandel buffers for compatibility
+    if(e.data.mandelBuffer) mandel[workerID]=new Uint8Array(e.data.mandelBuffer);
+    if(e.data.smoothMandel) smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
+}
+
 // Handle ImageBitmap response when OffscreenCanvas is used
 if(e.data.useOffscreenCanvas && e.data.imageBitmap){
     // Handle both fine and coarse rendering correctly
@@ -246,8 +255,8 @@ if(e.data.useOffscreenCanvas && e.data.imageBitmap){
         coarseCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
         mctx.drawImage(coarse,0,0);
     }
-} else {
-    // Fallback to original pixel array approach
+} else if(e.data.pixelsBuffer) {
+    // Fallback to pixel array approach (both legacy and modern WASM fallback)
     if(e.data.blockSize==1)
     mdSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);else
     mdCoarseSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);
