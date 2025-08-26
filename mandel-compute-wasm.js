@@ -3,6 +3,7 @@
 
 let wasmModule = null;
 let wasmInitialized = false;
+let pendingMessages = [];
 
 // Initialize WebAssembly module
 function initWasm() {
@@ -19,6 +20,13 @@ function initWasm() {
                     wasmModule = wasm_bindgen;
                     wasmInitialized = true;
                     console.log('Rust WebAssembly module loaded successfully');
+                    
+                    // Process any pending messages
+                    while (pendingMessages.length > 0) {
+                        const e = pendingMessages.shift();
+                        wasmMandelCompute(e);
+                    }
+                    
                     resolve();
                 }).catch(error => {
                     console.error('Failed to initialize WebAssembly module:', error);
@@ -39,7 +47,8 @@ function initWasm() {
 // WebAssembly implementation
 function wasmMandelCompute(e) {
     if (!wasmInitialized || !wasmModule) {
-        console.error('WASM not initialized - cannot compute');
+        // Queue the message for when WASM is ready
+        pendingMessages.push(e);
         return;
     }
     
