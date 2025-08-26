@@ -10,8 +10,80 @@ extern "C" {
 
 // Thread-local memory pools for avoiding allocations
 thread_local! {
-    static MANDEL_BUFFER: RefCell<Vec<u8>> = RefCell::new(Vec::new());
-    static SMOOTH_BUFFER: RefCell<Vec<u8>> = RefCell::new(Vec::new());
+    static IMAGE_BUFFER: RefCell<Vec<u8>> = RefCell::new(Vec::new());
+}
+
+/// Single unified function for Mandelbrot image generation
+/// Uses center coordinates in the complex plane, zoom level, max iterations and image dimensions  
+/// start_line parameter defines the vertical offset for this image segment
+/// width is the canvas width, height is the segment height
+#[wasm_bindgen]
+pub fn mandel_generate_image(
+    center_x: f64,
+    center_y: f64,
+    zoom: f64,
+    max_iterations: i32,
+    width: i32,
+    height: i32,
+    start_line: i32,
+) -> Box<[u8]> {
+    let escape_squared = 4.0f64;
+    let total_pixels = (width * height) as usize;
+    
+    // Debug logging for the first call
+    log(&format!("WASM: center_x={}, center_y={}, zoom={}, start_line={}, width={}, height={}", 
+                 center_x, center_y, zoom, start_line, width, height));
+    
+    // Use thread-local buffer for efficient memory management
+    IMAGE_BUFFER.with(|buffer| {
+        let mut buf = buffer.borrow_mut();
+        if buf.len() < total_pixels {
+            buf.resize(total_pixels, 0);
+        }
+
+        // Iterate through all pixels to generate the image
+        for y in 0..height {
+            let row_start = (y * width) as usize;
+            
+            for x in 0..width {
+                // Convert pixel coordinates to complex plane coordinates
+                // The full canvas coordinates for this pixel are (x, y + start_line)
+                let canvas_x = x as f64;
+                let canvas_y = (y + start_line) as f64;
+                
+                // Convert to complex plane coordinates centered on center_x, center_y
+                let x_norm = center_x + (canvas_x - width as f64 / 2.0) / zoom;
+                let y_norm = center_y + (canvas_y - width as f64 / 2.0) / zoom; // Use width for canvas height (square canvas)
+                
+                // Debug first pixel
+                if x == 0 && y == 0 {
+                    log(&format!("First pixel: canvas_pos=({}, {}), x_norm={}, y_norm={}", canvas_x, canvas_y, x_norm, y_norm));
+                }
+                
+                let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
+                
+                // Map iteration count to grayscale values for direct image display
+                let result_value = if iteration == max_iterations {
+                    0  // Interior points are black (0)
+                } else {
+                    // Map iteration count to grayscale: faster escape = brighter
+                    let normalized = (iteration as f64 / max_iterations as f64 * 255.0) as u8;
+                    255 - normalized  // Invert so that slower escape = darker
+                };
+                
+                // Debug first few pixels
+                if x < 3 && y < 3 {
+                    log(&format!("Pixel ({}, {}): iteration={}, result_value={}", x, y, iteration, result_value));
+                }
+                
+                let pixel_index = row_start + x as usize;
+                buf[pixel_index] = result_value;
+            }
+        }
+        
+        // Return slice as boxed slice for transfer to JS
+        buf[0..total_pixels].into()
+    })
 }
 
 #[inline(always)]
@@ -33,11 +105,7 @@ fn mandel_point_optimized(x_norm: f64, y_norm: f64, iter_max: i32, escape_square
         return iter_max;
     }
     
-    // Quick escape check for points far from the set
-    let quick_escape_dist = x_norm * x_norm + y_norm * y_norm;
-    if quick_escape_dist > 4.0 {
-        return 0;
-    }
+    // Remove the quick escape check as it's too aggressive and causing all pixels to escape immediately
     
     let mut zr = 0.0f64;
     let mut zi = 0.0f64;
@@ -74,266 +142,4 @@ fn mandel_point_optimized(x_norm: f64, y_norm: f64, iter_max: i32, escape_square
     }
     
     iteration
-}
-
-#[wasm_bindgen]
-pub struct MandelComputeResult {
-    iterations: i32,
-    escape_radius: f64,
-}
-
-#[wasm_bindgen]
-impl MandelComputeResult {
-    #[wasm_bindgen(getter)]
-    pub fn iterations(&self) -> i32 {
-        self.iterations
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn escape_radius(&self) -> f64 {
-        self.escape_radius
-    }
-}
-
-#[wasm_bindgen]
-pub struct MandelSegmentResult {
-    mandel_data: Vec<u8>,
-    smooth_data: Vec<u8>,
-}
-
-#[wasm_bindgen]
-impl MandelSegmentResult {
-    #[wasm_bindgen(getter)]
-    pub fn mandel_data(&self) -> Box<[u8]> {
-        self.mandel_data.clone().into_boxed_slice()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn smooth_data(&self) -> Box<[u8]> {
-        self.smooth_data.clone().into_boxed_slice()
-    }
-}
-
-#[wasm_bindgen]
-pub fn mandel_one_shot(
-    x_norm: f64,
-    y_norm: f64,
-    iter_max: i32,
-    smooth: bool,
-) -> MandelComputeResult {
-    let escape_squared = if smooth { 256.0 } else { 4.0 };
-    let iteration = mandel_point_optimized(x_norm, y_norm, iter_max, escape_squared);
-    
-    MandelComputeResult {
-        iterations: iteration,
-        escape_radius: 0.0, // Will be calculated if needed
-    }
-}
-
-#[wasm_bindgen]
-pub fn mandel_compute_segment_optimized(
-    start_line: i32,
-    segment_height: i32,
-    canvas_width: i32,
-    screen_x: f64,
-    screen_y: f64,
-    zoom: f64,
-    iter_max: i32,
-    smooth: bool,
-    block_size: i32,
-) -> Box<[u8]> {
-    let escape_squared = if smooth { 256.0 } else { 4.0 };
-    let l_block_size = if block_size == 1 { 1 } else { block_size / 2 };
-    let total_size = (canvas_width * segment_height) as usize;
-    
-    // Use the thread-local buffer but return a copy for transfer
-    MANDEL_BUFFER.with(|buffer| {
-        let mut buf = buffer.borrow_mut();
-        if buf.len() < total_size {
-            buf.resize(total_size, 0);
-        }
-        
-        let mut y = 0;
-        while y < segment_height {
-            let y_norm = ((y + start_line) as f64 - screen_y) / zoom;
-            let mut x = 0;
-            
-            while x < canvas_width {
-                let x_norm = (x as f64 - screen_x) / zoom;
-                let iteration = mandel_point_optimized(x_norm, y_norm, iter_max, escape_squared);
-                
-                let result_iteration = if iteration == iter_max {
-                    255
-                } else {
-                    (iteration % 255) as u8
-                };
-                
-                // Fill block efficiently
-                let y_end = std::cmp::min(y + l_block_size, segment_height);
-                let x_end = std::cmp::min(x + l_block_size, canvas_width);
-                
-                for j in y..y_end {
-                    let y_offset = (j * canvas_width) as usize;
-                    for i in x..x_end {
-                        let index = y_offset + i as usize;
-                        buf[index] = result_iteration;
-                    }
-                }
-                
-                x += l_block_size;
-            }
-            y += l_block_size;
-        }
-        
-        // Return slice - no cloning, direct reference
-        buf[0..total_size].into()
-    })
-}
-
-#[inline(always)]
-fn mandel_point_with_smooth_optimized(x_norm: f64, y_norm: f64, iter_max: i32) -> (i32, f64) {
-    let escape_squared = 256.0f64;
-    
-    // Improved early bailout checks
-    let main_cardioid_check = {
-        let x_plus_1 = x_norm + 1.0;
-        x_plus_1 * x_plus_1 + y_norm * y_norm < 0.0625
-    };
-    
-    let period2_bulb_check = {
-        let dist_sq = x_norm * x_norm + y_norm * y_norm;
-        dist_sq < 0.25 && x_norm > -0.75
-    };
-    
-    if main_cardioid_check || period2_bulb_check {
-        return (iter_max, 0.0);
-    }
-    
-    // Quick escape check
-    let quick_escape_dist = x_norm * x_norm + y_norm * y_norm;
-    if quick_escape_dist > 4.0 {
-        return (0, 0.0);
-    }
-    
-    let mut zr = 0.0f64;
-    let mut zi = 0.0f64;
-    let mut iteration = 0;
-    
-    // Optimized loop with unrolling
-    while iteration < iter_max {
-        // Unroll 2 iterations
-        for _ in 0..2 {
-            if iteration >= iter_max {
-                break;
-            }
-            
-            let zr_sq = zr * zr;
-            let zi_sq = zi * zi;
-            
-            if zr_sq + zi_sq >= escape_squared {
-                // Calculate smooth value with optimized math
-                let radius_sqrt = (zr_sq + zi_sq).sqrt();
-                let log2_recip = 1.4426950408889634; // 1/ln(2) - precomputed constant
-                let smooth_offset = ((radius_sqrt.ln() * log2_recip).ln() * log2_recip - 2.0) * 255.0;
-                return (iteration, smooth_offset.max(0.0).min(255.0));
-            }
-            
-            let zr_new = zr_sq - zi_sq + x_norm;
-            zi = 2.0 * zr * zi + y_norm;
-            zr = zr_new;
-            iteration += 1;
-        }
-    }
-    
-    (iter_max, 0.0)
-}
-
-#[wasm_bindgen]
-pub struct MandelSegmentResultOptimized {
-    mandel_data: Vec<u8>,
-    smooth_data: Vec<u8>,
-}
-
-#[wasm_bindgen]
-impl MandelSegmentResultOptimized {
-    #[wasm_bindgen(getter)]
-    pub fn mandel_data(&self) -> Box<[u8]> {
-        self.mandel_data.as_slice().into()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn smooth_data(&self) -> Box<[u8]> {
-        self.smooth_data.as_slice().into()
-    }
-}
-
-#[wasm_bindgen]
-pub fn mandel_compute_segment_with_smooth_optimized(
-    start_line: i32,
-    segment_height: i32,
-    canvas_width: i32,
-    screen_x: f64,
-    screen_y: f64,
-    zoom: f64,
-    iter_max: i32,
-    block_size: i32,
-) -> MandelSegmentResultOptimized {
-    let l_block_size = if block_size == 1 { 1 } else { block_size / 2 };
-    let total_size = (canvas_width * segment_height) as usize;
-    
-    // Use the thread-local buffers for computation
-    MANDEL_BUFFER.with(|mandel_buffer| {
-        SMOOTH_BUFFER.with(|smooth_buffer| {
-            let mut mandel_buf = mandel_buffer.borrow_mut();
-            let mut smooth_buf = smooth_buffer.borrow_mut();
-            
-            if mandel_buf.len() < total_size {
-                mandel_buf.resize(total_size, 0);
-            }
-            if smooth_buf.len() < total_size {
-                smooth_buf.resize(total_size, 0);
-            }
-            
-            let mut y = 0;
-            while y < segment_height {
-                let y_norm = ((y + start_line) as f64 - screen_y) / zoom;
-                let mut x = 0;
-                
-                while x < canvas_width {
-                    let x_norm = (x as f64 - screen_x) / zoom;
-                    let (iteration, smooth_offset) = mandel_point_with_smooth_optimized(x_norm, y_norm, iter_max);
-                    
-                    let result_iteration = if iteration == iter_max {
-                        255
-                    } else {
-                        (iteration % 255) as u8
-                    };
-                    
-                    let smooth_offset_u8 = smooth_offset as u8;
-                    
-                    // Fill block efficiently
-                    let y_end = std::cmp::min(y + l_block_size, segment_height);
-                    let x_end = std::cmp::min(x + l_block_size, canvas_width);
-                    
-                    for j in y..y_end {
-                        let y_offset = (j * canvas_width) as usize;
-                        for i in x..x_end {
-                            let index = y_offset + i as usize;
-                            mandel_buf[index] = result_iteration;
-                            smooth_buf[index] = smooth_offset_u8;
-                        }
-                    }
-                    
-                    x += l_block_size;
-                }
-                y += l_block_size;
-            }
-            
-            // Return result with slices (no cloning)
-            MandelSegmentResultOptimized {
-                mandel_data: mandel_buf[0..total_size].to_vec(),
-                smooth_data: smooth_buf[0..total_size].to_vec(),
-            }
-        })
-    })
 }

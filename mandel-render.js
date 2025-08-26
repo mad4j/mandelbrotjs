@@ -14,11 +14,10 @@ if (supportsOffscreenCanvas) {
     const imageData = ctx.createImageData(arrayWidth, segmentHeight);
     const pixels = imageData.data;
     
-    // Render to imageData
-    for(let y=0;y<segmentHeight;y+=lblockSize){for(let x=0;x<arrayWidth;x+=lblockSize){out=mandel[x+y*arrayWidth];if(out==255){r=0;g=0;b=0;}
-    else{packedColour=colours[out];r=(packedColour>>24)&0xff;g=(packedColour>>16)&0xff;b=(packedColour>>8)&0xff;if(smooth==1){smoothOffset=smoothMandel[x+y*arrayWidth];if(out<254)
-    packedColour1=colours[out+1];else
-    packedColour1=colours[0];r1=(packedColour1>>24)&0xff;g1=(packedColour1>>16)&0xff;b1=(packedColour1>>8)&0xff;r=r1-((r1-r)*smoothOffset)/255;g=g1-((g1-g)*smoothOffset)/255;b=b1-((b1-b)*smoothOffset)/255;}}
+    // Render to imageData - use values directly as grayscale
+    for(let y=0;y<segmentHeight;y+=lblockSize){for(let x=0;x<arrayWidth;x+=lblockSize){out=mandel[x+y*arrayWidth];
+    // Use the value directly as grayscale (r=g=b=out)
+    r=out;g=out;b=out;
     for(let j=0;j<lblockSize;j++){let yOffset=(y+j)*arrayWidth;for(let i=0;i<lblockSize;i++){pixelPos=((x+i)+yOffset)<<2;pixels[pixelPos]=r;pixels[++pixelPos]=g;pixels[++pixelPos]=b;pixels[++pixelPos]=255;}}}}
     
     // Put imageData to canvas and convert to ImageBitmap
@@ -29,12 +28,11 @@ if (supportsOffscreenCanvas) {
         mandel=null;
     });
 } else {
-    // Fallback to original pixel array approach
+    // Fallback to original pixel array approach - use values directly as grayscale
     let pixels=new Uint8Array(e.data.canvasBuffer);
-    for(let y=0;y<segmentHeight;y+=lblockSize){for(let x=0;x<arrayWidth;x+=lblockSize){out=mandel[x+y*arrayWidth];if(out==255){r=0;g=0;b=0;}
-    else{packedColour=colours[out];r=(packedColour>>24)&0xff;g=(packedColour>>16)&0xff;b=(packedColour>>8)&0xff;if(smooth==1){smoothOffset=smoothMandel[x+y*arrayWidth];if(out<254)
-    packedColour1=colours[out+1];else
-    packedColour1=colours[0];r1=(packedColour1>>24)&0xff;g1=(packedColour1>>16)&0xff;b1=(packedColour1>>8)&0xff;r=r1-((r1-r)*smoothOffset)/255;g=g1-((g1-g)*smoothOffset)/255;b=b1-((b1-b)*smoothOffset)/255;}}
+    for(let y=0;y<segmentHeight;y+=lblockSize){for(let x=0;x<arrayWidth;x+=lblockSize){out=mandel[x+y*arrayWidth];
+    // Use the value directly as grayscale (r=g=b=out)
+    r=out;g=out;b=out;
     for(let j=0;j<lblockSize;j++){let yOffset=(y+j)*arrayWidth;for(let i=0;i<lblockSize;i++){pixelPos=((x+i)+yOffset)<<2;pixels[pixelPos]=r;pixels[++pixelPos]=g;pixels[++pixelPos]=b;}}}}
     colours=null;
     self.postMessage({mandelBuffer:mandel.buffer,pixelsBuffer:pixels.buffer,smoothMandel:smoothMandel.buffer,workerID:workerID,blockSize:blockSize,useOffscreenCanvas:false},[mandel.buffer],[pixels.buffer],[smoothMandel.buffer]);
