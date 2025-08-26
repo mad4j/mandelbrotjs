@@ -6,7 +6,22 @@ console.log('Using WASM compute worker:', COMPUTE_WORKER_SCRIPT);
 const USE_WASM_UNIFIED_RENDERING = true;
 console.log('WASM unified rendering:', USE_WASM_UNIFIED_RENDERING ? 'ENABLED (computation + rendering in one step)' : 'DISABLED (separate render step)');
 
-var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;zoom=10;var startupTick=0;var startupAnim=1;const startZoom=300;const minZoom=100;const maxZoom=2000000000000000;const canvasWidth=600*2;const canvasHeight=600*2;const scaleFactor=2;const coarseWidth=canvasWidth/scaleFactor;const coarseHeight=canvasHeight/scaleFactor;var eventOccurred=0;var screenX=canvasWidth/2+5;var screenY=canvasHeight/2;const xnormMin=-8;const xnormMax=8;const ynormMin=-8;const ynormMax=8;var xnorm=0.0;var ynorm=0.0;var xmouse=0.0;var ymouse=0.0;var dLink;// Detect optimal worker count based on hardware capabilities
+var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;const startZoom=300;zoom=startZoom;var startupTick=0;var startupAnim=1;const minZoom=100;const maxZoom=2000000000000000;const canvasWidth=600;const canvasHeight=600;const scaleFactor=1;const coarseWidth=canvasWidth/2;const coarseHeight=canvasHeight/2;var eventOccurred=0;
+// Set initial position to show classic Mandelbrot view centered at (-0.5, 0) in complex plane
+// For center_x = -0.5: (canvasWidth/2 - screenX) / zoom = -0.5
+// So screenX = canvasWidth/2 - (-0.5 * zoom) = canvasWidth/2 + (0.5 * zoom)
+var screenX=canvasWidth/2 + (0.5 * startZoom);
+var screenY=canvasHeight/2; // center_y = 0
+const xnormMin=-8;
+const xnormMax=8;
+const ynormMin=-8;
+const ynormMax=8;
+var xnorm=0.0;
+var ynorm=0.0;
+var xmouse=0.0;
+var ymouse=0.0;
+var dLink;
+// Detect optimal worker count based on hardware capabilities
 var workers = (function() {
     // Use hardware concurrency if available, with reasonable bounds
     if (navigator.hardwareConcurrency) {
@@ -213,7 +228,7 @@ if(blockSize[workerID]==1){
     // Coarse rendering - put RGBA data to coarse canvas  
     mdCoarseSegment[workerID]=rgbaData;
     mCoarseSegment[workerID].data.set(mdCoarseSegment[workerID]);
-    var lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);
+    var lstartLine=Math.floor(workerID*chunkHeight/2);
     coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);
     mctx.drawImage(coarse,0,0);
 }
@@ -232,7 +247,7 @@ if(workersRunning==0){
     }
     if((!eventOccurred)&&(allFinished)){
         needRedraw=0;
-        mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);
+        mctx.drawImage(offScreen,0,0,canvasWidth,canvasHeight);
         if(!rotating){
             workingText.style.visibility="hidden";
             mc.style.borderColor="black";
@@ -254,30 +269,6 @@ if(workersRunning==0){
 }
 };
 // Legacy onRenderEnded removed - unified WASM rendering handles everything in onComputeEnded
-if(showAxes)
-drawAxes();if(startupAnim){if(startupTick<50){startupTick++;zoom=Math.ceil(Math.sin((startupTick/70)*Math.PI)*(startZoom+80));zoomText.textContent=Math.floor(zoom);if(startupTick>29){if(startupTick>30)
-timesTaken[startupTick-31]=performance.now()-timer;timer=performance.now();}}
-else{timesTakenSorted=timesTaken.sort(function(a,b){return a-b});benchmarkTime=Math.min(Math.max((timesTakenSorted[5]+timesTakenSorted[6]+timesTakenSorted[7])/3,2),20);if(benchmarkTime<7)
-maxBlockSize=8;else
-maxBlockSize=16;for(var i=0;i<workers;i++){blockSize[i]=maxBlockSize;}startupAnim=0;zoomText.textContent=Math.floor(zoom);if(iterations!=iterSlider.value){iterations=Math.floor(iterSlider.value);itersInput.value=iterations;}
-xnorm=(canvasWidth/2*1.0-screenX)/zoom;ynorm=(canvasHeight/2*1.0-screenY)/zoom;if(movingToSaved){travelling=1;travelDirX=Math.sign(destX-xnorm);travelDirY=Math.sign(destY-ynorm);travelDirZoom=Math.sign(destZoom-zoom);}}}
-else if(travelling>0){updateCoords(canvasWidth/2,canvasHeight/2,"centre");zoomText.textContent=Math.floor(zoom);if(travelling==2){ldestX=-1.342281879194631;ldestY=0.0;ldestZoom=300;if((zoom>Math.floor(ldestZoom))&&((!pointOnScreen(destX,destY))||(zoom>destZoom))){zoom+=Math.ceil((ldestZoom-zoom)/10*(benchmarkTime/4+2));if(Math.abs(zoom-ldestZoom)<5)
-zoom=Math.floor(ldestZoom);screenX=Math.round(-xnorm*zoom+canvasWidth/2);screenY=Math.round(-ynorm*zoom+canvasHeight/2);}
-else{travelling=1;travelDirX=Math.sign(destX-xnorm);travelDirY=Math.sign(destY-ynorm);travelDirZoom=Math.sign(destZoom-zoom);}}
-else{ldestX=destX;ldestY=destY;ldestZoom=destZoom;if((xnorm!=ldestX)||(ynorm!=ldestY)||(zoom!=ldestZoom)||(iterations!=destIters)){if(iterations<destIters){iterations+=benchmarkTime;if(iterations>destIters)
-iterations=destIters;iterSlider.value=iterations;itersInput.value=iterations;}
-if(iterations>destIters){iterations-=benchmarkTime*2;if(iterations<destIters)
-iterations=destIters;iterSlider.value=iterations;itersInput.value=iterations;}
-if((Math.abs((xnorm-ldestX)*zoom)<1)||(Math.sign(ldestX-xnorm)!=travelDirX))
-xnorm=ldestX;else
-xnorm+=(ldestX-xnorm)/Math.log(zoom)/4*benchmarkTime*(movingToSaved*2+1);if((Math.abs((ynorm-ldestY)*zoom)<1)||(Math.sign(ldestY-ynorm)!=travelDirY))
-ynorm=ldestY;else
-ynorm+=(ldestY-ynorm)/Math.log(zoom)/4*benchmarkTime*(movingToSaved*2+1);if((Math.abs((zoom-ldestZoom)/ldestZoom*100)<3)||(Math.sign(ldestZoom-zoom)!=travelDirZoom))
-zoom=Math.floor(ldestZoom);else
-zoom+=Math.max(Math.ceil(Math.log(ldestZoom-zoom)*(zoom/2000)*benchmarkTime*(movingToSaved*4+1)),1);screenX=Math.round(-xnorm*zoom+canvasWidth/2);screenY=Math.round(-ynorm*zoom+canvasHeight/2);}
-else{travelling=0;movingToSaved=0;start=performance.now();zoom=Math.floor(zoom);}}}
-else if((blockSize[workerID]>=2)&&(!eventOccurred)&&(!mousePressed)){if(performance.now()>zoomTime+200){needToRun[workerID]=1;blockSize[workerID]/=2;}}else
-needToRun[workerID]=0;}
 function wheelMoved(event)
 {event.preventDefault();if(posterTime!=0)
 return 1;if(typeof hideInfo==='function'){hideInfo();}zoomTime=performance.now();eventTime=performance.now();var rect=mc.getBoundingClientRect();var mx=(event.clientX-rect.left)/(rect.width)*rect.width*scaleFactor-4;var my=(event.clientY-rect.top)/(rect.height)*rect.height*scaleFactor-4;if((mx<=0)||(mx>canvasWidth)||(my<=0)||(my>canvasHeight))
@@ -339,9 +330,9 @@ if((blockSize[i]>1)&&(performance.now()>zoomTime+500))
 needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((needToRun[i]==1)&&(!eventOccurred)){if(computeWorkerRunning[i]){continue;}
 // Always use WASM unified rendering - no separate render step needed
 if(!computeWorker[i]){computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onComputeEnded;}
-workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
+workersRunning++;computeWorkerRunning[i]=1;console.log(`Starting worker ${i} with zoom=${zoom}, screenX=${screenX}, screenY=${screenY}`);if(blockSize[i]==1)
 computeWorker[i].postMessage({workerID:i,startLine:startLine,canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0});else
-computeWorker[i].postMessage({workerID:i,startLine:startLine/scaleFactor,canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0});}}}
+computeWorker[i].postMessage({workerID:i,startLine:startLine/2,canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/2,screenY:screenY/2,zoom:zoom/2,iterations:iterations,oneShot:0});}}}
 if((workersRunning==0)&&(rotating==1))
 rotatePalette(-1);else
 requestAnimationFrame(drawMandel);}

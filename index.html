@@ -192,10 +192,10 @@
 		canvas.style.width = size + 'px';
 		canvas.style.height = size + 'px';
 		
-		// Set internal size to match mandel-workers.js expectations but with square aspect ratio
-		// Use coarseWidth (600) for both dimensions to maintain square aspect
-		canvas.width = 600;  // coarseWidth from mandel-workers.js (now square)
-		canvas.height = 600; // Make it square
+		// Set internal size to match mandel-workers.js expectations
+		// Use canvasWidth and canvasHeight (600x600) for square aspect
+		canvas.width = 600;  // canvasWidth from mandel-workers.js
+		canvas.height = 600; // canvasHeight from mandel-workers.js
 	}
 
 	// Update info display
