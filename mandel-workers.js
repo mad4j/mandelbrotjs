@@ -2,6 +2,10 @@
 const COMPUTE_WORKER_SCRIPT = "mandel-compute-wasm.js";
 console.log('Using WASM compute worker:', COMPUTE_WORKER_SCRIPT);
 
+// WASM unified rendering configuration - skip separate render step
+const USE_WASM_UNIFIED_RENDERING = true;
+console.log('WASM unified rendering:', USE_WASM_UNIFIED_RENDERING ? 'ENABLED (computation + rendering in one step)' : 'DISABLED (separate render step)');
+
 var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;zoom=10;var startupTick=0;var startupAnim=1;const startZoom=300;const minZoom=100;const maxZoom=2000000000000000;const canvasWidth=600*2;const canvasHeight=600*2;const scaleFactor=2;const coarseWidth=canvasWidth/scaleFactor;const coarseHeight=canvasHeight/scaleFactor;var eventOccurred=0;var screenX=canvasWidth/2+5;var screenY=canvasHeight/2;const xnormMin=-8;const xnormMax=8;const ynormMin=-8;const ynormMax=8;var xnorm=0.0;var ynorm=0.0;var xmouse=0.0;var ymouse=0.0;var dLink;// Detect optimal worker count based on hardware capabilities
 var workers = (function() {
     // Use hardware concurrency if available, with reasonable bounds
@@ -190,13 +194,44 @@ itersToPrint="n/a";mandelText.textContent=itersToPrint;}
 var onComputeEnded=function(e)
 {if(!e.data.finished){if(blockSize[e.data.workerID]==1){percentDone[e.data.workerID]=Math.round(e.data.lineCount/(canvasHeight/workers)*100);var totalProgress=0;for(var j=0;j<workers;j++){totalProgress+=percentDone[j];}progress=Math.floor(totalProgress/workers);workingText.innerHTML="<i>"+progress+"%</i>";}
 return 1;}
-var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;mandel[workerID]=new Uint8Array(e.data.mandel);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);while(renderWorkerRunning[workerID]!=0){console.log("Waiting for worker to end");}
-if(!renderWorker[workerID]){renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;}
-renderWorkerRunning[workerID]=1;if(blockSize[workerID]==1)
-renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[workerID].buffer},[mandel[workerID].buffer],[smoothMandel[workerID].buffer],[mdSegment[workerID].buffer]);else
-renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdCoarseSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,segmentHeight:chunkHeight/scaleFactor,smooth:smooth,smoothMandel:smoothMandel[workerID]},[mandel[workerID].buffer],[mdCoarseSegment[workerID].buffer],[smoothMandel[workerID].buffer]);}
+var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;
+
+// Handle unified WASM rendering (RGBA data directly from compute worker)
+if(USE_WASM_UNIFIED_RENDERING && e.data.useUnifiedRendering){
+    // WASM generated RGBA data directly - no render step needed
+    var rgbaData=new Uint8ClampedArray(e.data.mandel);
+    
+    if(blockSize[workerID]==1){
+        // Fine rendering - put RGBA data directly to canvas
+        mdSegment[workerID]=rgbaData;
+        finished[workerID]=1;
+        mSegment[workerID].data.set(mdSegment[workerID]);
+        var lstartLine=Math.floor(workerID*chunkHeight);
+        offScreenCtx.putImageData(mSegment[workerID],0,lstartLine);
+    } else {
+        // Coarse rendering - put RGBA data to coarse canvas  
+        mdCoarseSegment[workerID]=rgbaData;
+        mCoarseSegment[workerID].data.set(mdCoarseSegment[workerID]);
+        var lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);
+        coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);
+        mctx.drawImage(coarse,0,0);
+    }
+    
+    // Skip render worker entirely
+    workersRunning--;
+} else {
+    // Traditional pipeline: iteration data needs rendering step
+    mandel[workerID]=new Uint8Array(e.data.mandel);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);while(renderWorkerRunning[workerID]!=0){console.log("Waiting for worker to end");}
+    if(!renderWorker[workerID]){renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;}
+    renderWorkerRunning[workerID]=1;if(blockSize[workerID]==1)
+    renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[workerID].buffer},[mandel[workerID].buffer],[smoothMandel[workerID].buffer],[mdSegment[workerID].buffer]);else
+    renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdCoarseSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,segmentHeight:chunkHeight/scaleFactor,smooth:smooth,smoothMandel:smoothMandel[workerID]},[mandel[workerID].buffer],[mdCoarseSegment[workerID].buffer],[smoothMandel[workerID].buffer]);
+}
+};
 var onRenderEnded=function(e)
-{var workerID=e.data.workerID;mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
+{var workerID=e.data.workerID;
+// Traditional JS render worker logic
+mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
 // Handle ImageBitmap response when OffscreenCanvas is used
 if(e.data.useOffscreenCanvas && e.data.imageBitmap){
     // Handle both fine and coarse rendering correctly
@@ -308,8 +343,8 @@ needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((n
 if(computeWorkerRunning[i]){continue;}
 if(needRecompute){if(!computeWorker[i]){computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onComputeEnded;}
 workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
-computeWorker[i].postMessage({mandelBuffer:mandel[i].buffer,workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer]);else
-computeWorker[i].postMessage({mandelBuffer:mandel[i].buffer,workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer]);}
+computeWorker[i].postMessage({workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,useUnifiedRendering:USE_WASM_UNIFIED_RENDERING});else
+computeWorker[i].postMessage({workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,useUnifiedRendering:USE_WASM_UNIFIED_RENDERING});}
 else{workersRunning++;if(!renderWorker[i]){renderWorker[i]=new Worker("mandel-render.js");renderWorker[i].onmessage=onRenderEnded;}
 renderWorkerRunning[i]=1;renderWorker[i].postMessage({colours:colours,mandel:mandel[i].buffer,canvasBuffer:mdSegment[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer],[mdSegment[i].buffer]);}}}}
 if((workersRunning==0)&&(rotating==1))

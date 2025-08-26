@@ -102,14 +102,26 @@ function wasmMandelCompute(e) {
         const startTime = performance.now();
         
         console.log(`WASM params: center_x=${center_x}, center_y=${center_y}, zoom=${zoom}, startLine=${startLine}, segmentHeight=${segmentHeight}, canvasWidth=${canvasWidth}`);
-        const imageData = wasmModule.mandel_generate_image(center_x, center_y, zoom, iter_max, canvasWidth, segmentHeight, startLine);
-        const mandelData = new Uint8Array(imageData);
+        
+        // Check if unified rendering is requested
+        const useUnifiedRendering = e.data.useUnifiedRendering || false;
+        
+        let imageData, mandelData;
+        if (useUnifiedRendering) {
+            // Generate RGBA data directly for unified pipeline
+            imageData = wasmModule.mandel_generate_rgba_image(center_x, center_y, zoom, iter_max, canvasWidth, segmentHeight, startLine);
+            mandelData = new Uint8Array(imageData);
+        } else {
+            // Generate grayscale iteration data for traditional pipeline
+            imageData = wasmModule.mandel_generate_image(center_x, center_y, zoom, iter_max, canvasWidth, segmentHeight, startLine);
+            mandelData = new Uint8Array(imageData);
+        }
         
         // No smooth data in simplified implementation
         const smoothMandel = new Uint8Array(1);
         
         const computeTime = performance.now() - startTime;
-        console.log(`WASM simplified computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
+        console.log(`WASM ${useUnifiedRendering ? 'unified' : 'simplified'} computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
         
         self.postMessage({
             finished: 1,
@@ -118,6 +130,7 @@ function wasmMandelCompute(e) {
             smooth: 0, // No smooth in simplified implementation
             smoothMandel: smoothMandel.buffer,
             usedWasm: true,
+            useUnifiedRendering: useUnifiedRendering,
             computeTime: computeTime
         }, [mandelData.buffer, smoothMandel.buffer]);
         

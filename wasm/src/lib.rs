@@ -75,6 +75,60 @@ pub fn mandel_generate_image(
     buf.into_boxed_slice()
 }
 
+/// WASM function for direct RGBA image generation (for rendering pipeline)
+/// Produces RGBA pixel data ready for ImageBitmap creation
+#[wasm_bindgen]
+pub fn mandel_generate_rgba_image(
+    center_x: f64,
+    center_y: f64,
+    zoom: f64,
+    max_iterations: i32,
+    width: i32,
+    height: i32,
+    start_line: i32,
+) -> Box<[u8]> {
+    let escape_squared = 4.0f64;
+    let total_pixels = (width * height) as usize;
+    
+    // RGBA buffer: 4 bytes per pixel
+    let mut buf = vec![0u8; total_pixels * 4];
+
+    // Parallelize the computation across rows using Rayon
+    buf.par_chunks_mut((width * 4) as usize)
+        .enumerate()
+        .for_each(|(y, row_chunk)| {
+            for x in 0..width {
+                // Convert pixel coordinates to complex plane coordinates
+                let canvas_x = x as f64;
+                let canvas_y = (y as i32 + start_line) as f64;
+                
+                // Convert to complex plane coordinates centered on center_x, center_y
+                let x_norm = center_x + (canvas_x - width as f64 / 2.0) / zoom;
+                let y_norm = center_y + (canvas_y - width as f64 / 2.0) / zoom;
+                
+                let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
+                
+                // Map iteration count to grayscale values
+                let grayscale_value = if iteration == max_iterations {
+                    0  // Interior points are black
+                } else {
+                    // Map iteration count to grayscale: faster escape = brighter
+                    let normalized = (iteration as f64 / max_iterations as f64 * 255.0) as u8;
+                    255 - normalized  // Invert so that slower escape = darker
+                };
+                
+                // Set RGBA values (grayscale + full alpha)
+                let pixel_index = (x * 4) as usize;
+                row_chunk[pixel_index] = grayscale_value;     // R
+                row_chunk[pixel_index + 1] = grayscale_value; // G
+                row_chunk[pixel_index + 2] = grayscale_value; // B
+                row_chunk[pixel_index + 3] = 255;             // A (full opacity)
+            }
+        });
+        
+    buf.into_boxed_slice()
+}
+
 #[inline(always)]
 fn mandel_point_optimized(x_norm: f64, y_norm: f64, iter_max: i32, escape_squared: f64) -> i32 {
 
