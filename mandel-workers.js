@@ -6,7 +6,7 @@ var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rota
 var workers = (function() {
     // Use hardware concurrency if available, with reasonable bounds
     if (navigator.hardwareConcurrency) {
-        return Math.max(2, Math.min(navigator.hardwareConcurrency, 16));
+        return Math.max(2, navigator.hardwareConcurrency-2);
     }
     // Fallback to 4 workers for older browsers
     return 4;
