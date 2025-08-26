@@ -7,10 +7,6 @@ let wasm_bindgen;
     }
     let wasm = undefined;
 
-    const cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
-
-    if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
-
     let cachedUint8ArrayMemory0 = null;
 
     function getUint8ArrayMemory0() {
@@ -20,187 +16,29 @@ let wasm_bindgen;
         return cachedUint8ArrayMemory0;
     }
 
-    function getStringFromWasm0(ptr, len) {
-        ptr = ptr >>> 0;
-        return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
-    }
-
     function getArrayU8FromWasm0(ptr, len) {
         ptr = ptr >>> 0;
         return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
     }
     /**
-     * @param {number} x_norm
-     * @param {number} y_norm
-     * @param {number} iter_max
-     * @param {boolean} smooth
-     * @returns {MandelComputeResult}
-     */
-    __exports.mandel_one_shot = function(x_norm, y_norm, iter_max, smooth) {
-        const ret = wasm.mandel_one_shot(x_norm, y_norm, iter_max, smooth);
-        return MandelComputeResult.__wrap(ret);
-    };
-
-    /**
-     * @param {number} start_line
-     * @param {number} segment_height
-     * @param {number} canvas_width
+     * Single unified function for Mandelbrot image generation
+     * Takes screen center coordinates, zoom level, max iterations and image dimensions
+     * Optionally takes a start_line offset for segment-based computation
      * @param {number} screen_x
      * @param {number} screen_y
      * @param {number} zoom
-     * @param {number} iter_max
-     * @param {boolean} smooth
-     * @param {number} block_size
+     * @param {number} max_iterations
+     * @param {number} width
+     * @param {number} height
+     * @param {number} start_line
      * @returns {Uint8Array}
      */
-    __exports.mandel_compute_segment_optimized = function(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, smooth, block_size) {
-        const ret = wasm.mandel_compute_segment_optimized(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, smooth, block_size);
+    __exports.mandel_generate_image = function(screen_x, screen_y, zoom, max_iterations, width, height, start_line) {
+        const ret = wasm.mandel_generate_image(screen_x, screen_y, zoom, max_iterations, width, height, start_line);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
     };
-
-    /**
-     * @param {number} start_line
-     * @param {number} segment_height
-     * @param {number} canvas_width
-     * @param {number} screen_x
-     * @param {number} screen_y
-     * @param {number} zoom
-     * @param {number} iter_max
-     * @param {number} block_size
-     * @returns {MandelSegmentResultOptimized}
-     */
-    __exports.mandel_compute_segment_with_smooth_optimized = function(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, block_size) {
-        const ret = wasm.mandel_compute_segment_with_smooth_optimized(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, block_size);
-        return MandelSegmentResultOptimized.__wrap(ret);
-    };
-
-    const MandelComputeResultFinalization = (typeof FinalizationRegistry === 'undefined')
-        ? { register: () => {}, unregister: () => {} }
-        : new FinalizationRegistry(ptr => wasm.__wbg_mandelcomputeresult_free(ptr >>> 0, 1));
-
-    class MandelComputeResult {
-
-        static __wrap(ptr) {
-            ptr = ptr >>> 0;
-            const obj = Object.create(MandelComputeResult.prototype);
-            obj.__wbg_ptr = ptr;
-            MandelComputeResultFinalization.register(obj, obj.__wbg_ptr, obj);
-            return obj;
-        }
-
-        __destroy_into_raw() {
-            const ptr = this.__wbg_ptr;
-            this.__wbg_ptr = 0;
-            MandelComputeResultFinalization.unregister(this);
-            return ptr;
-        }
-
-        free() {
-            const ptr = this.__destroy_into_raw();
-            wasm.__wbg_mandelcomputeresult_free(ptr, 0);
-        }
-        /**
-         * @returns {number}
-         */
-        get iterations() {
-            const ret = wasm.mandelcomputeresult_iterations(this.__wbg_ptr);
-            return ret;
-        }
-        /**
-         * @returns {number}
-         */
-        get escape_radius() {
-            const ret = wasm.mandelcomputeresult_escape_radius(this.__wbg_ptr);
-            return ret;
-        }
-    }
-    __exports.MandelComputeResult = MandelComputeResult;
-
-    const MandelSegmentResultFinalization = (typeof FinalizationRegistry === 'undefined')
-        ? { register: () => {}, unregister: () => {} }
-        : new FinalizationRegistry(ptr => wasm.__wbg_mandelsegmentresult_free(ptr >>> 0, 1));
-
-    class MandelSegmentResult {
-
-        __destroy_into_raw() {
-            const ptr = this.__wbg_ptr;
-            this.__wbg_ptr = 0;
-            MandelSegmentResultFinalization.unregister(this);
-            return ptr;
-        }
-
-        free() {
-            const ptr = this.__destroy_into_raw();
-            wasm.__wbg_mandelsegmentresult_free(ptr, 0);
-        }
-        /**
-         * @returns {Uint8Array}
-         */
-        get mandel_data() {
-            const ret = wasm.mandelsegmentresult_mandel_data(this.__wbg_ptr);
-            var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-            return v1;
-        }
-        /**
-         * @returns {Uint8Array}
-         */
-        get smooth_data() {
-            const ret = wasm.mandelsegmentresult_smooth_data(this.__wbg_ptr);
-            var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-            return v1;
-        }
-    }
-    __exports.MandelSegmentResult = MandelSegmentResult;
-
-    const MandelSegmentResultOptimizedFinalization = (typeof FinalizationRegistry === 'undefined')
-        ? { register: () => {}, unregister: () => {} }
-        : new FinalizationRegistry(ptr => wasm.__wbg_mandelsegmentresultoptimized_free(ptr >>> 0, 1));
-
-    class MandelSegmentResultOptimized {
-
-        static __wrap(ptr) {
-            ptr = ptr >>> 0;
-            const obj = Object.create(MandelSegmentResultOptimized.prototype);
-            obj.__wbg_ptr = ptr;
-            MandelSegmentResultOptimizedFinalization.register(obj, obj.__wbg_ptr, obj);
-            return obj;
-        }
-
-        __destroy_into_raw() {
-            const ptr = this.__wbg_ptr;
-            this.__wbg_ptr = 0;
-            MandelSegmentResultOptimizedFinalization.unregister(this);
-            return ptr;
-        }
-
-        free() {
-            const ptr = this.__destroy_into_raw();
-            wasm.__wbg_mandelsegmentresultoptimized_free(ptr, 0);
-        }
-        /**
-         * @returns {Uint8Array}
-         */
-        get mandel_data() {
-            const ret = wasm.mandelsegmentresultoptimized_mandel_data(this.__wbg_ptr);
-            var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-            return v1;
-        }
-        /**
-         * @returns {Uint8Array}
-         */
-        get smooth_data() {
-            const ret = wasm.mandelsegmentresultoptimized_smooth_data(this.__wbg_ptr);
-            var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-            return v1;
-        }
-    }
-    __exports.MandelSegmentResultOptimized = MandelSegmentResultOptimized;
 
     async function __wbg_load(module, imports) {
         if (typeof Response === 'function' && module instanceof Response) {
@@ -245,9 +83,6 @@ let wasm_bindgen;
             table.set(offset + 2, true);
             table.set(offset + 3, false);
             ;
-        };
-        imports.wbg.__wbindgen_throw = function(arg0, arg1) {
-            throw new Error(getStringFromWasm0(arg0, arg1));
         };
 
         return imports;

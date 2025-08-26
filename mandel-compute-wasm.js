@@ -1,5 +1,5 @@
-// High-performance Rust WebAssembly implementation for mandel-compute
-// This module uses Rust+WASM as the only computation engine
+// Simplified Rust WebAssembly implementation for mandel-compute
+// Single function API for Mandelbrot image generation
 
 let wasmModule = null;
 let wasmInitialized = false;
@@ -19,7 +19,7 @@ function initWasm() {
                 wasm_bindgen('./pkg/mandel_wasm_bg.wasm').then(() => {
                     wasmModule = wasm_bindgen;
                     wasmInitialized = true;
-                    console.log('Rust WebAssembly module loaded successfully');
+                    console.log('Rust WebAssembly module loaded successfully - Simplified API');
                     
                     // Process any pending messages
                     while (pendingMessages.length > 0) {
@@ -44,7 +44,7 @@ function initWasm() {
     });
 }
 
-// WebAssembly implementation
+// Simplified WebAssembly implementation using single function
 function wasmMandelCompute(e) {
     if (!wasmInitialized || !wasmModule) {
         // Queue the message for when WASM is ready
@@ -53,21 +53,27 @@ function wasmMandelCompute(e) {
     }
     
     const oneShot = e.data.oneShot;
-    const screenX = e.data.screenX;
-    const screenY = e.data.screenY;
-    const zoom = e.data.zoom;
-    const iter_max = e.data.iterations;
-    const smooth = e.data.smooth == 1;
     
     if (oneShot == 1) {
+        // For single point computation, we still need the old interface
+        // This is used for mouse hover information, so let's provide a simple implementation
         const x = e.data.x;
         const y = e.data.y;
-        const xnorm = (x - screenX) / zoom;
-        const ynorm = (y - screenY) / zoom;
+        const screenX = e.data.screenX;
+        const screenY = e.data.screenY;
+        const zoom = e.data.zoom;
+        const iter_max = e.data.iterations;
+        
+        // Convert screen coordinates to complex plane coordinates
+        const x_norm = (x - screenX) / zoom;
+        const y_norm = (y - screenY) / zoom;
         
         try {
-            const result = wasmModule.mandel_one_shot(xnorm, ynorm, iter_max, smooth);
-            const oneShotResult = result.iterations;
+            // Generate a 1x1 image for the single point
+            const result = wasmModule.mandel_generate_image(x, y, zoom, iter_max, 1, 1, 0);
+            const imageData = new Uint8Array(result);
+            // Convert grayscale back to iteration count approximation
+            const oneShotResult = imageData[0] === 255 ? iter_max : imageData[0];
             self.postMessage({ oneShotResult: oneShotResult, usedWasm: true });
             return;
         } catch (error) {
@@ -76,48 +82,42 @@ function wasmMandelCompute(e) {
         }
     }
     
-    // Full segment computation
+    // Full image computation using new simplified API
     const startLine = e.data.startLine;
     const workerID = e.data.workerID;
-    const blockSize = e.data.blockSize;
     const canvasWidth = e.data.canvasWidth;
     const segmentHeight = e.data.segmentHeight;
+    const screenX = e.data.screenX;
+    const screenY = e.data.screenY;
+    const zoom = e.data.zoom;
+    const iter_max = e.data.iterations;
     
     try {
         const startTime = performance.now();
-        let mandelData, smoothMandel;
         
-        if (smooth) {
-            const result = wasmModule.mandel_compute_segment_with_smooth_optimized(
-                startLine, segmentHeight, canvasWidth,
-                screenX, screenY, zoom, iter_max, blockSize
-            );
-            mandelData = new Uint8Array(result.mandel_data);
-            smoothMandel = new Uint8Array(result.smooth_data);
-        } else {
-            const resultData = wasmModule.mandel_compute_segment_optimized(
-                startLine, segmentHeight, canvasWidth,
-                screenX, screenY, zoom, iter_max, smooth, blockSize
-            );
-            mandelData = new Uint8Array(resultData);
-            smoothMandel = new Uint8Array(1); // Empty for non-smooth
-        }
+        // Use the screen coordinates directly, as in the original implementation
+        // Generate the entire image segment using the new single function with correct start_line
+        const imageData = wasmModule.mandel_generate_image(screenX, screenY, zoom, iter_max, canvasWidth, segmentHeight, startLine);
+        const mandelData = new Uint8Array(imageData);
+        
+        // No smooth data in simplified implementation
+        const smoothMandel = new Uint8Array(1);
         
         const computeTime = performance.now() - startTime;
-        console.log(`WASM computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
+        console.log(`WASM simplified computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
         
         self.postMessage({
             finished: 1,
             mandel: mandelData.buffer,
             workerID: workerID,
-            smooth: smooth ? 1 : 0,
+            smooth: 0, // No smooth in simplified implementation
             smoothMandel: smoothMandel.buffer,
             usedWasm: true,
             computeTime: computeTime
         }, [mandelData.buffer, smoothMandel.buffer]);
         
     } catch (error) {
-        console.error('WASM segment computation failed:', error);
+        console.error('WASM simplified computation failed:', error);
     }
 }
 
@@ -128,7 +128,7 @@ self.onmessage = function(e) {
 
 // Initialize WASM on worker startup
 initWasm().then(() => {
-    console.log('WASM worker ready - using WebAssembly for computations');
+    console.log('WASM worker ready - using simplified API for computations');
 }).catch(error => {
     console.error('WASM worker initialization failed:', error);
 });
