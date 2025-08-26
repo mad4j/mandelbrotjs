@@ -219,17 +219,17 @@ var rgbaData=new Uint8ClampedArray(e.data.mandel);
 
 if(blockSize[workerID]==1){
     // Fine rendering - put RGBA data directly to canvas
-    mdSegment[workerID]=rgbaData;
+    mSegment[workerID].data.set(rgbaData);
     finished[workerID]=1;
-    mSegment[workerID].data.set(mdSegment[workerID]);
     var lstartLine=Math.floor(workerID*chunkHeight);
-    offScreenCtx.putImageData(mSegment[workerID],0,lstartLine);
+    offScreenSegmentCtx[workerID].putImageData(mSegment[workerID],0,0);
+    offScreenCtx.drawImage(offScreenSegment[workerID],0,lstartLine);
 } else {
     // Coarse rendering - put RGBA data to coarse canvas  
-    mdCoarseSegment[workerID]=rgbaData;
-    mCoarseSegment[workerID].data.set(mdCoarseSegment[workerID]);
+    mCoarseSegment[workerID].data.set(rgbaData);
     var lstartLine=Math.floor(workerID*chunkHeight/2);
-    coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);
+    coarseSegmentCtx[workerID].putImageData(mCoarseSegment[workerID],0,0);
+    coarseCtx.drawImage(coarseSegment[workerID],0,lstartLine);
     mctx.drawImage(coarse,0,0);
 }
 
