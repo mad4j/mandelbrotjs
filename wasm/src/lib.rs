@@ -14,20 +14,25 @@ thread_local! {
 }
 
 /// Single unified function for Mandelbrot image generation
-/// Takes center coordinates in the complex plane, zoom level, max iterations and image dimensions  
-/// start_line parameter is not used in this simplified implementation
+/// Uses the original coordinate system: screen coordinates, zoom level, max iterations and image dimensions  
+/// start_line parameter defines the vertical offset for this image segment
 #[wasm_bindgen]
 pub fn mandel_generate_image(
-    center_x: f64,
-    center_y: f64,
+    screen_x: f64,
+    screen_y: f64,
     zoom: f64,
     max_iterations: i32,
     width: i32,
     height: i32,
-    _start_line: i32,
+    start_line: i32,
+    canvas_height: i32,
 ) -> Box<[u8]> {
     let escape_squared = 4.0f64;
     let total_pixels = (width * height) as usize;
+    
+    // Debug logging for the first call
+    log(&format!("WASM: screen_x={}, screen_y={}, zoom={}, start_line={}, width={}, height={}", 
+                 screen_x, screen_y, zoom, start_line, width, height));
     
     // Use thread-local buffer for efficient memory management
     IMAGE_BUFFER.with(|buffer| {
@@ -41,10 +46,23 @@ pub fn mandel_generate_image(
             let row_start = (y * width) as usize;
             
             for x in 0..width {
-                // Convert pixel coordinates to complex plane coordinates
-                // Pixel (x, y) relative to image center (width/2, height/2)
-                let x_norm = center_x + (x as f64 - width as f64 / 2.0) / zoom;
-                let y_norm = center_y + (y as f64 - height as f64 / 2.0) / zoom;
+                // Convert pixel coordinates to complex plane using the exact original formula  
+                // Original: xnorm = (canvasWidth/2 - screenX)/zoom + pixel_offset
+                let canvas_center_x = width as f64 / 2.0;
+                let canvas_center_y = canvas_height as f64 / 2.0; // Use full canvas height
+                
+                // The pixel position in the full canvas coordinate system
+                let full_canvas_y = (y + start_line) as f64;
+                
+                // Apply original coordinate transformation
+                let x_norm = (canvas_center_x - screen_x) / zoom + (x as f64 - canvas_center_x) / zoom;
+                let y_norm = (canvas_center_y - screen_y) / zoom + (full_canvas_y - canvas_center_y) / zoom;
+                
+                // Debug first pixel
+                if x == 0 && y == 0 {
+                    log(&format!("First pixel: center=({}, {}), screen=({}, {}), x_norm={}, y_norm={}", 
+                                canvas_center_x, canvas_center_y, screen_x, screen_y, x_norm, y_norm));
+                }
                 
                 let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
                 
@@ -54,6 +72,11 @@ pub fn mandel_generate_image(
                 } else {
                     (iteration % 255) as u8  // Exterior points get iteration count mod 255
                 };
+                
+                // Debug first few pixels
+                if x < 3 && y < 3 {
+                    log(&format!("Pixel ({}, {}): iteration={}, result_value={}", x, y, iteration, result_value));
+                }
                 
                 let pixel_index = row_start + x as usize;
                 buf[pixel_index] = result_value;
@@ -84,11 +107,7 @@ fn mandel_point_optimized(x_norm: f64, y_norm: f64, iter_max: i32, escape_square
         return iter_max;
     }
     
-    // Quick escape check for points far from the set
-    let quick_escape_dist = x_norm * x_norm + y_norm * y_norm;
-    if quick_escape_dist > 4.0 {
-        return 0;
-    }
+    // Remove the quick escape check as it's too aggressive and causing all pixels to escape immediately
     
     let mut zr = 0.0f64;
     let mut zi = 0.0f64;

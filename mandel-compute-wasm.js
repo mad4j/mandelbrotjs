@@ -94,13 +94,11 @@ function wasmMandelCompute(e) {
     try {
         const startTime = performance.now();
         
-        // Calculate the center coordinates in complex plane for this segment
-        // The segment spans from startLine to startLine + segmentHeight in canvas coordinates
-        const centerX = (canvasWidth / 2 - screenX) / zoom;
-        const centerY = (startLine + segmentHeight / 2 - screenY) / zoom;
-        
-        // Generate the entire image segment using the new single function
-        const imageData = wasmModule.mandel_generate_image(centerX, centerY, zoom, iter_max, canvasWidth, segmentHeight, 0);
+        // Pass the original coordinate parameters directly to Rust
+        // Let Rust handle the coordinate transformation like the original implementation
+        const canvasHeight = canvasWidth * 2; // Based on mandel-workers.js: canvasHeight=600*2
+        console.log(`WASM params: screenX=${screenX}, screenY=${screenY}, zoom=${zoom}, startLine=${startLine}, segmentHeight=${segmentHeight}, canvasWidth=${canvasWidth}`);
+        const imageData = wasmModule.mandel_generate_image(screenX, screenY, zoom, iter_max, canvasWidth, segmentHeight, startLine, canvasHeight);
         const mandelData = new Uint8Array(imageData);
         
         // No smooth data in simplified implementation

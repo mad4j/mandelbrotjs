@@ -7,6 +7,10 @@ let wasm_bindgen;
     }
     let wasm = undefined;
 
+    const cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
+
+    if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
+
     let cachedUint8ArrayMemory0 = null;
 
     function getUint8ArrayMemory0() {
@@ -16,25 +20,31 @@ let wasm_bindgen;
         return cachedUint8ArrayMemory0;
     }
 
+    function getStringFromWasm0(ptr, len) {
+        ptr = ptr >>> 0;
+        return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
+    }
+
     function getArrayU8FromWasm0(ptr, len) {
         ptr = ptr >>> 0;
         return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
     }
     /**
      * Single unified function for Mandelbrot image generation
-     * Takes center coordinates in the complex plane, zoom level, max iterations and image dimensions
-     * start_line parameter is not used in this simplified implementation
-     * @param {number} center_x
-     * @param {number} center_y
+     * Uses the original coordinate system: screen coordinates, zoom level, max iterations and image dimensions
+     * start_line parameter defines the vertical offset for this image segment
+     * @param {number} screen_x
+     * @param {number} screen_y
      * @param {number} zoom
      * @param {number} max_iterations
      * @param {number} width
      * @param {number} height
-     * @param {number} _start_line
+     * @param {number} start_line
+     * @param {number} canvas_height
      * @returns {Uint8Array}
      */
-    __exports.mandel_generate_image = function(center_x, center_y, zoom, max_iterations, width, height, _start_line) {
-        const ret = wasm.mandel_generate_image(center_x, center_y, zoom, max_iterations, width, height, _start_line);
+    __exports.mandel_generate_image = function(screen_x, screen_y, zoom, max_iterations, width, height, start_line, canvas_height) {
+        const ret = wasm.mandel_generate_image(screen_x, screen_y, zoom, max_iterations, width, height, start_line, canvas_height);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
@@ -74,6 +84,9 @@ let wasm_bindgen;
     function __wbg_get_imports() {
         const imports = {};
         imports.wbg = {};
+        imports.wbg.__wbg_log_03d383992a4dc022 = function(arg0, arg1) {
+            console.log(getStringFromWasm0(arg0, arg1));
+        };
         imports.wbg.__wbindgen_init_externref_table = function() {
             const table = wasm.__wbindgen_export_0;
             const offset = table.grow(4);
