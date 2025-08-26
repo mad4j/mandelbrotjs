@@ -53,8 +53,8 @@ let wasm_bindgen;
      * @param {number} block_size
      * @returns {Uint8Array}
      */
-    __exports.mandel_compute_segment = function(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, smooth, block_size) {
-        const ret = wasm.mandel_compute_segment(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, smooth, block_size);
+    __exports.mandel_compute_segment_optimized = function(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, smooth, block_size) {
+        const ret = wasm.mandel_compute_segment_optimized(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, smooth, block_size);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
@@ -69,11 +69,11 @@ let wasm_bindgen;
      * @param {number} zoom
      * @param {number} iter_max
      * @param {number} block_size
-     * @returns {MandelSegmentResult}
+     * @returns {MandelSegmentResultOptimized}
      */
-    __exports.mandel_compute_segment_with_smooth = function(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, block_size) {
-        const ret = wasm.mandel_compute_segment_with_smooth(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, block_size);
-        return MandelSegmentResult.__wrap(ret);
+    __exports.mandel_compute_segment_with_smooth_optimized = function(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, block_size) {
+        const ret = wasm.mandel_compute_segment_with_smooth_optimized(start_line, segment_height, canvas_width, screen_x, screen_y, zoom, iter_max, block_size);
+        return MandelSegmentResultOptimized.__wrap(ret);
     };
 
     const MandelComputeResultFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -124,14 +124,6 @@ let wasm_bindgen;
 
     class MandelSegmentResult {
 
-        static __wrap(ptr) {
-            ptr = ptr >>> 0;
-            const obj = Object.create(MandelSegmentResult.prototype);
-            obj.__wbg_ptr = ptr;
-            MandelSegmentResultFinalization.register(obj, obj.__wbg_ptr, obj);
-            return obj;
-        }
-
         __destroy_into_raw() {
             const ptr = this.__wbg_ptr;
             this.__wbg_ptr = 0;
@@ -163,6 +155,52 @@ let wasm_bindgen;
         }
     }
     __exports.MandelSegmentResult = MandelSegmentResult;
+
+    const MandelSegmentResultOptimizedFinalization = (typeof FinalizationRegistry === 'undefined')
+        ? { register: () => {}, unregister: () => {} }
+        : new FinalizationRegistry(ptr => wasm.__wbg_mandelsegmentresultoptimized_free(ptr >>> 0, 1));
+
+    class MandelSegmentResultOptimized {
+
+        static __wrap(ptr) {
+            ptr = ptr >>> 0;
+            const obj = Object.create(MandelSegmentResultOptimized.prototype);
+            obj.__wbg_ptr = ptr;
+            MandelSegmentResultOptimizedFinalization.register(obj, obj.__wbg_ptr, obj);
+            return obj;
+        }
+
+        __destroy_into_raw() {
+            const ptr = this.__wbg_ptr;
+            this.__wbg_ptr = 0;
+            MandelSegmentResultOptimizedFinalization.unregister(this);
+            return ptr;
+        }
+
+        free() {
+            const ptr = this.__destroy_into_raw();
+            wasm.__wbg_mandelsegmentresultoptimized_free(ptr, 0);
+        }
+        /**
+         * @returns {Uint8Array}
+         */
+        get mandel_data() {
+            const ret = wasm.mandelsegmentresultoptimized_mandel_data(this.__wbg_ptr);
+            var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+            return v1;
+        }
+        /**
+         * @returns {Uint8Array}
+         */
+        get smooth_data() {
+            const ret = wasm.mandelsegmentresultoptimized_smooth_data(this.__wbg_ptr);
+            var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+            return v1;
+        }
+    }
+    __exports.MandelSegmentResultOptimized = MandelSegmentResultOptimized;
 
     async function __wbg_load(module, imports) {
         if (typeof Response === 'function' && module instanceof Response) {
