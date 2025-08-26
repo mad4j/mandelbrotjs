@@ -1,6 +1,6 @@
-// Use WASM worker as the only implementation
-const COMPUTE_WORKER_SCRIPT = "mandel-compute-wasm.js";
-console.log('Using WASM compute worker:', COMPUTE_WORKER_SCRIPT);
+// Use enhanced WASM worker as the primary implementation
+const COMPUTE_WORKER_SCRIPT = "mandel-compute-enhanced.js";
+console.log('Using enhanced WASM compute worker:', COMPUTE_WORKER_SCRIPT);
 
 var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;zoom=10;var startupTick=0;var startupAnim=1;const startZoom=300;const minZoom=100;const maxZoom=2000000000000000;const canvasWidth=600*2;const canvasHeight=600*2;const scaleFactor=2;const coarseWidth=canvasWidth/scaleFactor;const coarseHeight=canvasHeight/scaleFactor;var eventOccurred=0;var screenX=canvasWidth/2+400;var screenY=canvasHeight/2;const xnormMin=-8;const xnormMax=8;const ynormMin=-8;const ynormMax=8;var xnorm=0.0;var ynorm=0.0;var xmouse=0.0;var ymouse=0.0;var dLink;// Detect optimal worker count based on hardware capabilities
 var workers = (function() {

@@ -1,11 +1,14 @@
-// Build configuration for mandelbrotjs with Rust WASM implementation
+// Build configuration for mandelbrotjs with enhanced Rust WASM implementation
+// Updated for substantial refactoring with unified API
 
-// Configuration - WASM is the only supported implementation
+// Configuration - Enhanced WASM is the primary implementation
 const BUILD_CONFIG = {
-    wasmWorkerScript: 'mandel-compute-wasm.js'
+    wasmWorkerScript: 'mandel-compute-enhanced.js',
+    fallbackWorkerScript: 'mandel-compute-wasm.js',
+    useEnhancedAPI: true
 };
 
-console.log('Using WASM worker:', BUILD_CONFIG.wasmWorkerScript);
+console.log('Using enhanced WASM worker:', BUILD_CONFIG.wasmWorkerScript);
 
 // Export configuration for use in other modules
 if (typeof module !== 'undefined' && module.exports) {

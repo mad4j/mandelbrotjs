@@ -1,6 +1,35 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const __wbg_mandelparameters_free: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_min_real: (a: number) => number;
+export const __wbg_set_mandelparameters_min_real: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_max_real: (a: number) => number;
+export const __wbg_set_mandelparameters_max_real: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_min_imag: (a: number) => number;
+export const __wbg_set_mandelparameters_min_imag: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_max_imag: (a: number) => number;
+export const __wbg_set_mandelparameters_max_imag: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_canvas_width: (a: number) => number;
+export const __wbg_set_mandelparameters_canvas_width: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_canvas_height: (a: number) => number;
+export const __wbg_set_mandelparameters_canvas_height: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_max_iterations: (a: number) => number;
+export const __wbg_set_mandelparameters_max_iterations: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_smooth_rendering: (a: number) => number;
+export const __wbg_set_mandelparameters_smooth_rendering: (a: number, b: number) => void;
+export const __wbg_get_mandelparameters_block_size: (a: number) => number;
+export const __wbg_set_mandelparameters_block_size: (a: number, b: number) => void;
+export const mandelparameters_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => number;
+export const mandelparameters_zoom: (a: number) => number;
+export const mandelparameters_center_real: (a: number) => number;
+export const mandelparameters_center_imag: (a: number) => number;
+export const __wbg_mandelimageresult_free: (a: number, b: number) => void;
+export const mandelimageresult_image_data: (a: number) => [number, number];
+export const mandelimageresult_width: (a: number) => number;
+export const mandelimageresult_height: (a: number) => number;
+export const __wbg_mandelsegmentimageresult_free: (a: number, b: number) => void;
+export const mandelsegmentimageresult_image_data: (a: number) => [number, number];
 export const __wbg_mandelcomputeresult_free: (a: number, b: number) => void;
 export const mandelcomputeresult_iterations: (a: number) => number;
 export const mandelcomputeresult_escape_radius: (a: number) => number;
@@ -12,6 +41,12 @@ export const mandel_compute_segment_optimized: (a: number, b: number, c: number,
 export const mandelsegmentresultoptimized_mandel_data: (a: number) => [number, number];
 export const mandelsegmentresultoptimized_smooth_data: (a: number) => [number, number];
 export const mandel_compute_segment_with_smooth_optimized: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => number;
+export const generate_mandelbrot_image: (a: number) => number;
+export const generate_mandelbrot_segment: (a: number, b: number, c: number) => number;
+export const calculate_optimal_iterations: (a: number, b: number, c: number) => number;
+export const mandelsegmentimageresult_segment_height: (a: number) => number;
+export const mandelsegmentimageresult_computation_time_ms: (a: number) => number;
+export const mandelimageresult_computation_time_ms: (a: number) => number;
 export const __wbg_mandelsegmentresultoptimized_free: (a: number, b: number) => void;
 export const __wbindgen_export_0: WebAssembly.Table;
 export const __wbindgen_free: (a: number, b: number, c: number) => void;
