@@ -6,7 +6,7 @@ console.log('Using WASM compute worker:', COMPUTE_WORKER_SCRIPT);
 const USE_WASM_UNIFIED_RENDERING = true;
 console.log('WASM unified rendering:', USE_WASM_UNIFIED_RENDERING ? 'ENABLED (computation + rendering in one step)' : 'DISABLED (separate render step)');
 
-var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;const startZoom=300;zoom=startZoom;var startupTick=0;var startupAnim=1;const minZoom=100;const maxZoom=2000000000000000;
+var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;const startZoom=300;zoom=startZoom;var startupTick=0;var startupAnim=0;const minZoom=100;const maxZoom=2000000000000000;
 // Dynamic canvas dimensions based on window size
 var canvasWidth=window.innerWidth;
 var canvasHeight=window.innerHeight;
@@ -411,6 +411,6 @@ workersRunning++;computeWorkerRunning[i]=1;console.log(`Starting worker ${i} wit
 computeWorker[i].postMessage({workerID:i,startLine:startLine,canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0});else
 computeWorker[i].postMessage({workerID:i,startLine:startLine/2,canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/2,screenY:screenY/2,zoom:zoom/2,iterations:iterations,oneShot:0});}}}
 if((workersRunning==0)&&(rotating==1))
-rotatePalette(-1);else
+rotatePalette(-1);else if((workersRunning>0||rotating==1)&&needRedraw==1)
 requestAnimationFrame(drawMandel);}
 setup();drawMandel();
