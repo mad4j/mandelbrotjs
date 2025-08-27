@@ -333,7 +333,8 @@ if(blockSize==1){
     var lstartLine=0; // Single worker starts at line 0
     coarseSegmentCtx.putImageData(mCoarseSegment,0,0);
     coarseCtx.drawImage(coarseSegment,0,lstartLine);
-    mctx.drawImage(coarse,0,0);
+    // Scale coarse image to fill entire canvas using GPU-accelerated scaling
+    mctx.drawImage(coarse, 0, 0, coarseWidth, coarseHeight, 0, 0, canvasWidth, canvasHeight);
 }
 
 // No render step needed - compute worker provided RGBA directly
