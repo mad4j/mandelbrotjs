@@ -227,6 +227,7 @@ if(blockSize[workerID]==1){
 } else {
     // Coarse rendering - put RGBA data to coarse canvas  
     mCoarseSegment[workerID].data.set(rgbaData);
+    finished[workerID]=1;
     var lstartLine=Math.floor(workerID*chunkHeight/2);
     coarseSegmentCtx[workerID].putImageData(mCoarseSegment[workerID],0,0);
     coarseCtx.drawImage(coarseSegment[workerID],0,lstartLine);
@@ -247,7 +248,10 @@ if(workersRunning==0){
     }
     if((!eventOccurred)&&(allFinished)){
         needRedraw=0;
-        mctx.drawImage(offScreen,0,0,canvasWidth,canvasHeight);
+        // Only draw offScreen canvas in fine mode (blockSize==1), coarse mode already drew to main canvas
+        if(blockSize[0]==1){
+            mctx.drawImage(offScreen,0,0);
+        }
         if(!rotating){
             workingText.style.visibility="hidden";
             mc.style.borderColor="black";
