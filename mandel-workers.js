@@ -28,25 +28,22 @@ var ynorm=0.0;
 var xmouse=0.0;
 var ymouse=0.0;
 var dLink;
-// Detect optimal worker count based on hardware capabilities
-var workers = (function() {
-    // Use hardware concurrency if available, with reasonable bounds
-    if (navigator.hardwareConcurrency) {
-        return Math.max(2, navigator.hardwareConcurrency-2);
-    }
-    // Fallback to 4 workers for older browsers
-    return 4;
-})();
+// Use single worker thread as requested for visualization
+var workers = 1;
 
-var blockSize=new Uint8Array(workers);
-for(var i=0; i<workers; i++) { blockSize[i]=16; }
-var colours=new Uint32Array(256);var vga=new Uint32Array(256);const paletteCount=13;var currentPalette=-1;var currentRotation=0;var rotating=0;var renderCount=0;var travelling=0;var movingToSaved=0;var destX=0;var destY=0;var destZoom=0;var destIters=0;var computeWorker=new Array();var computeWorkerRunning=new Uint8Array(workers);var needToRun=new Uint8Array(workers);var finished=new Uint8Array(workers);var timesTaken=new Array(20);var timesTakenSorted=new Array(20);var benchmarkTime=2;
+// Simplified single worker variables
+var blockSize = 16;
+var colours=new Uint32Array(256);var vga=new Uint32Array(256);const paletteCount=13;var currentPalette=-1;var currentRotation=0;var rotating=0;var renderCount=0;var travelling=0;var movingToSaved=0;var destX=0;var destY=0;var destZoom=0;var destIters=0;
+// Single worker variables
+var computeWorker=null;var computeWorkerRunning=false;var needToRun=false;var finished=false;var timesTaken=new Array(20);var timesTakenSorted=new Array(20);var benchmarkTime=2;
 // Legacy variables - kept for compatibility but no longer populated with WASM unified rendering
-var mandel=new Array();var smoothMandel=new Array();var percentDone=new Array();
-for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;
-// Dynamic chunk height calculation
-var chunkHeight=Math.floor(canvasHeight/workers);
-var needRedraw=0;var needRecompute=1;var showAxes=0;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var smoothBox=document.getElementById("smooth");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();
+var mandel=null;var smoothMandel=null;var percentDone=0;
+needToRun=false; finished=false; var workersRunning=0;
+// Dynamic chunk height calculation - full canvas height for single worker
+var chunkHeight=canvasHeight;
+var needRedraw=0;var needRecompute=1;var showAxes=0;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var smoothBox=document.getElementById("smooth");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});
+// Single worker canvas segments
+var offScreenSegment=null;var offScreenSegmentCtx=null;var mSegment=null;var mdSegment=null;var coarseSegment=null;var coarseSegmentCtx=null;var mCoarseSegment=null;var mdCoarseSegment=null;
 // Initialize canvas-dependent objects after dimensions are set
 // This will be called by updateCanvasDimensions() during setup
 // Function to update canvas dimensions and reinitialize canvas-dependent objects
@@ -56,7 +53,7 @@ function updateCanvasDimensions() {
     canvasHeight = window.innerHeight;
     coarseWidth = Math.floor(canvasWidth/2);
     coarseHeight = Math.floor(canvasHeight/2);
-    chunkHeight = Math.floor(canvasHeight/workers);
+    chunkHeight = canvasHeight; // Single worker uses full height
     
     // Update offScreen and coarse canvases
     offScreen.width = canvasWidth;
@@ -64,50 +61,48 @@ function updateCanvasDimensions() {
     coarse.width = coarseWidth;
     coarse.height = coarseHeight;
     
-    // Initialize or reinitialize worker segments with new dimensions
-    for(var i=0; i<workers; i++) {
-        computeWorkerRunning[i]=0;
-        
-        // Create or update segment canvases
-        if(!offScreenSegment[i]) {
-            offScreenSegment[i] = document.createElement('canvas');
-            offScreenSegmentCtx[i] = offScreenSegment[i].getContext("2d",{alpha:false});
-        }
-        offScreenSegment[i].width = canvasWidth;
-        offScreenSegment[i].height = chunkHeight;
-        mSegment[i] = offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,chunkHeight);
-        mdSegment[i] = new Uint8ClampedArray(canvasWidth*chunkHeight*4);
-        mdSegment[i].set(mSegment[i].data);
-        
-        if(!coarseSegment[i]) {
-            coarseSegment[i] = document.createElement('canvas');
-            coarseSegmentCtx[i] = coarseSegment[i].getContext("2d",{alpha:false});
-        }
-        coarseSegment[i].width = coarseWidth;
-        coarseSegment[i].height = Math.floor(coarseHeight/workers);
-        mCoarseSegment[i] = coarseSegmentCtx[i].getImageData(0,0,coarseWidth,Math.floor(coarseHeight/workers));
-        mdCoarseSegment[i] = mCoarseSegment[i].data;
-        
-        // Update legacy arrays (though not used in WASM rendering)
-        mandel[i] = new Uint8Array(canvasWidth*chunkHeight);
-        smoothMandel[i] = new Uint8Array(canvasWidth*chunkHeight);
-        percentDone[i] = 0;
-        
-        // Initialize alpha channel for new segments
-        for(let y=0; y<chunkHeight; y++){
-            for(let x=0; x<canvasWidth; x++){
-                let pixelPos=(x+y*canvasWidth)*4;
-                if(pixelPos + 3 < mdSegment[i].length) {
-                    mdSegment[i][pixelPos+3]=255;
-                }
+    // Initialize single worker segments with new dimensions
+    computeWorkerRunning = false;
+    
+    // Create or update segment canvases for single worker
+    if(!offScreenSegment) {
+        offScreenSegment = document.createElement('canvas');
+        offScreenSegmentCtx = offScreenSegment.getContext("2d",{alpha:false});
+    }
+    offScreenSegment.width = canvasWidth;
+    offScreenSegment.height = chunkHeight;
+    mSegment = offScreenSegmentCtx.getImageData(0,0,canvasWidth,chunkHeight);
+    mdSegment = new Uint8ClampedArray(canvasWidth*chunkHeight*4);
+    mdSegment.set(mSegment.data);
+    
+    if(!coarseSegment) {
+        coarseSegment = document.createElement('canvas');
+        coarseSegmentCtx = coarseSegment.getContext("2d",{alpha:false});
+    }
+    coarseSegment.width = coarseWidth;
+    coarseSegment.height = coarseHeight; // Single worker uses full coarse height
+    mCoarseSegment = coarseSegmentCtx.getImageData(0,0,coarseWidth,coarseHeight);
+    mdCoarseSegment = mCoarseSegment.data;
+    
+    // Update legacy variables (though not used in WASM rendering)
+    mandel = new Uint8Array(canvasWidth*chunkHeight);
+    smoothMandel = new Uint8Array(canvasWidth*chunkHeight);
+    percentDone = 0;
+    
+    // Initialize alpha channel for single worker segment
+    for(let y=0; y<chunkHeight; y++){
+        for(let x=0; x<canvasWidth; x++){
+            let pixelPos=(x+y*canvasWidth)*4;
+            if(pixelPos + 3 < mdSegment.length) {
+                mdSegment[pixelPos+3]=255;
             }
         }
-        for(let y=0; y<Math.floor(coarseHeight/workers); y++){
-            for(let x=0; x<coarseWidth; x++){
-                let pixelPos=(x+y*coarseWidth)*4;
-                if(pixelPos + 3 < mdCoarseSegment[i].length) {
-                    mdCoarseSegment[i][pixelPos+3]=255;
-                }
+    }
+    for(let y=0; y<coarseHeight; y++){
+        for(let x=0; x<coarseWidth; x++){
+            let pixelPos=(x+y*coarseWidth)*4;
+            if(pixelPos + 3 < mdCoarseSegment.length) {
+                mdCoarseSegment[pixelPos+3]=255;
             }
         }
     }
@@ -147,10 +142,10 @@ showAxes=0;startRender(0,0);}
 function toggleSmooth()
 {if(smoothBox.checked==true)
 smooth=1;else
-smooth=0;if(smooth==1){for(i=0;i<workers;i++)
-smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));}
-else{for(i=0;i<workers;i++)
-smoothMandel[i]=0;}
+smooth=0;if(smooth==1){
+smoothMandel=new Uint8Array(canvasWidth*canvasHeight);}
+else{
+smoothMandel=null;}
 startRender(1,0);}
 function pad(n)
 {return n<10?'0'+n:n;}
@@ -167,7 +162,7 @@ rotatePalette(lcurrentRotation);if(lshowAxes>0){showAxes=1;showAxesBox.checked=t
 showAxes=0;if(lsmooth>0){smooth=1;smoothBox.checked=true;}else
 smooth=0;}
 function killWorkers()
-{for(var i=0;i<workers;i++){if((blockSize[i]<4)&&(computeWorkerRunning[i]==1)){computeWorker[i].terminate();computeWorker[i]=null;computeWorkerRunning[i]=0;workersRunning--;mandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));}}}
+{if((blockSize<4)&&(computeWorkerRunning==true)){if(computeWorker){computeWorker.terminate();computeWorker=null;}computeWorkerRunning=false;workersRunning--;mandel=new Uint8Array(canvasWidth*canvasHeight);smoothMandel=new Uint8Array(canvasWidth*canvasHeight);}}
 function drawAxes()
 {var canvasWidthScaled=canvasWidth/scaleFactor;var canvasHeightScaled=canvasHeight/scaleFactor;var originX=Math.round(screenX/scaleFactor);var originY=Math.round(screenY/scaleFactor);mctx.translate(0.5,0.5);mctx.strokeStyle="#DDDDDD";mctx.font="10px Sans-serif";mctx.lineWidth=1.0;mctx.beginPath();mctx.moveTo(0,originY);mctx.lineTo(canvasWidthScaled,originY);mctx.stroke();mctx.beginPath();mctx.moveTo(originX,0);mctx.lineTo(originX,canvasHeightScaled);mctx.stroke();mctx.beginPath();mctx.arc(originX,originY,5,0,2*Math.PI);mctx.stroke();var step=1.0;if(zoom>250)
 step=0.5;if(zoom>600)
@@ -186,25 +181,26 @@ tickSize=3;tickX=Math.round((screenX+i*zoom)/scaleFactor);tickY=Math.round((scre
 continue;mctx.beginPath();mctx.moveTo(tickX,originY-tickSize);mctx.lineTo(tickX,originY+tickSize);mctx.stroke();mctx.strokeText(-Math.round(i*10000)/10000,originX+6,tickY+4);}}
 mctx.translate(-0.5,-0.5);}
 var onUltraComputeEnded=function(e)
-{if(!e.data.finished){if(blockSize[e.data.workerID]==1){percentDone[e.data.workerID]=Math.round(e.data.lineCount/(ultraHeight/workers)*100);var totalProgress=0;for(var j=0;j<workers;j++){totalProgress+=percentDone[j];}progress=Math.floor(totalProgress/workers);workingText.innerHTML="<i>"+progress+"%</i>";var lineStart=Math.floor(e.data.workerID*(canvasHeight/scaleFactor/workers));var lineEnd=Math.floor(e.data.workerID*(canvasHeight/scaleFactor/workers))+e.data.lineCount/(ultraHeight/canvasHeight)/scaleFactor;var lineLength=e.data.lineCount/(ultraHeight/canvasHeight)/scaleFactor;mctx.fillStyle="#FFFFFF";mctx.fillRect(0,lineStart,2,lineLength);mctx.fillRect(canvasWidth/scaleFactor-2,lineStart,2,lineLength);mctx.fillStyle="#000000";mctx.fillRect(0,lineEnd-2,2,2);mctx.fillRect(canvasWidth/scaleFactor-2,lineEnd-2,2,2);}
+{if(!e.data.finished){if(blockSize==1){percentDone=Math.round(e.data.lineCount/ultraHeight*100);workingText.innerHTML="<i>"+percentDone+"%</i>";}
 return 1;}
-var workerID=e.data.workerID;var ultraMandel=new Uint8Array(e.data.mandel);var ultraSmoothMandel=new Uint8Array(e.data.smoothMandel);computeWorker[workerID].terminate();computeWorker[workerID]=null;ultraSegment=document.createElement('canvas');ultraSegment.width=ultraWidth;ultraSegment.height=ultraHeight/workers;var ultraSegmentCtx=ultraSegment.getContext("2d",{alpha:false});var multraSegment=ultraSegmentCtx.getImageData(0,0,ultraSegment.width,ultraSegment.height);var pixels=multraSegment.data;for(let y=0;y<ultraSegment.height;y++){var yOffset=y*ultraSegment.width;for(let x=0;x<ultraSegment.width;x++){out=ultraMandel[x+y*ultraSegment.width];if(out==255){r=0;g=0;b=0;}else{packedColour=colours[out];r=(packedColour>>24)&0xff;g=(packedColour>>16)&0xff;b=(packedColour>>8)&0xff;if(smooth==1){smoothOffset=ultraSmoothMandel[x+y*ultraSegment.width];if(out<254)
+var workerID=e.data.workerID;var ultraMandel=new Uint8Array(e.data.mandel);var ultraSmoothMandel=new Uint8Array(e.data.smoothMandel);computeWorker.terminate();computeWorker=null;ultraSegment=document.createElement('canvas');ultraSegment.width=ultraWidth;ultraSegment.height=ultraHeight;var ultraSegmentCtx=ultraSegment.getContext("2d",{alpha:false});var multraSegment=ultraSegmentCtx.getImageData(0,0,ultraSegment.width,ultraSegment.height);var pixels=multraSegment.data;for(let y=0;y<ultraSegment.height;y++){var yOffset=y*ultraSegment.width;for(let x=0;x<ultraSegment.width;x++){out=ultraMandel[x+y*ultraSegment.width];if(out==255){r=0;g=0;b=0;}else{packedColour=colours[out];r=(packedColour>>24)&0xff;g=(packedColour>>16)&0xff;b=(packedColour>>8)&0xff;if(smooth==1){smoothOffset=ultraSmoothMandel[x+y*ultraSegment.width];if(out<254)
 packedColour1=colours[out+1];else
 packedColour1=colours[0];r1=(packedColour1>>24)&0xff;g1=(packedColour1>>16)&0xff;b1=(packedColour1>>8)&0xff;r=r1-((r1-r)*smoothOffset)/255;g=g1-((g1-g)*smoothOffset)/255;b=b1-((b1-b)*smoothOffset)/255;}}
 pixelPos=(x+yOffset)<<2;pixels[pixelPos]=r;pixels[++pixelPos]=g;pixels[++pixelPos]=b;pixels[++pixelPos]=255;}}
-lstartLine=Math.floor(workerID*(ultraHeight/workers));ultraCanvasCtx.putImageData(multraSegment,0,lstartLine);workersRunning--;ultraSegment=null;if(workersRunning==0){ultraScaledCanvasCtx.drawImage(ultraCanvas,0,0,ultraWidth/2,ultraHeight/2);document.getElementById("poster").innerHTML="Poster";document.getElementById("save").disabled=false;document.getElementById("cycle").disabled=false;nextPalette.disabled=false;prevPalette.disabled=false;iterSlider.disabled=false;itersInput.disabled=false;showAxesBox.disabled=false;smoothBox.disabled=false;jumpSelect.disabled=false;needRedraw=0;var now=new Date();var timeStamp=""+now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+"-"+pad(now.getHours())+pad(now.getMinutes())+pad(now.getSeconds());dLink=document.createElement('a');dLink.setAttribute('download',"mandel-"+timeStamp+".png");dLink.innerHTML="Poster created "+timeStamp+"<br><br>";
+lstartLine=0; // Single worker starts at line 0
+ultraCanvasCtx.putImageData(multraSegment,0,lstartLine);workersRunning--;ultraSegment=null;if(workersRunning==0){ultraScaledCanvasCtx.drawImage(ultraCanvas,0,0,ultraWidth/2,ultraHeight/2);document.getElementById("poster").innerHTML="Poster";document.getElementById("save").disabled=false;document.getElementById("cycle").disabled=false;nextPalette.disabled=false;prevPalette.disabled=false;iterSlider.disabled=false;itersInput.disabled=false;showAxesBox.disabled=false;smoothBox.disabled=false;jumpSelect.disabled=false;needRedraw=0;var now=new Date();var timeStamp=""+now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+"-"+pad(now.getHours())+pad(now.getMinutes())+pad(now.getSeconds());dLink=document.createElement('a');dLink.setAttribute('download',"mandel-"+timeStamp+".png");dLink.innerHTML="Poster created "+timeStamp+"<br><br>";
 // Optimized poster generation: Use canvas.toBlob() instead of toDataURL + atob for better performance
 ultraScaledCanvas.toBlob(function(theBlob) {
     dLink.setAttribute('href',URL.createObjectURL(theBlob));posterDialogBody.appendChild(dLink);posterDialog.style.display="block";ultraScaledCanvas=null;ultraCanvas=null;startRender(0,0);
 }, "image/png");}}
 function makePoster()
-{if(posterTime!=0){for(i=0;i<workers;i++){if(computeWorker[i]){computeWorker[i].terminate();computeWorker[i]=null;}
-workersRunning=0;}
+{if(posterTime!=0){if(computeWorker){computeWorker.terminate();computeWorker=null;}
+workersRunning=0;
 document.getElementById("poster").innerHTML="Poster";document.getElementById("save").disabled=false;document.getElementById("cycle").disabled=false;nextPalette.disabled=false;prevPalette.disabled=false;iterSlider.disabled=false;itersInput.disabled=false;showAxesBox.disabled=false;smoothBox.disabled=false;jumpSelect.disabled=false;workingText.innerHTML="";posterTime=0;startRender(0,0);return 1;}
 if(needRedraw)
-return 1;posterTime=performance.now();mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);needRedraw=1;document.getElementById("poster").innerHTML="Cancel";document.getElementById("save").disabled=true;document.getElementById("cycle").disabled=true;nextPalette.disabled=true;prevPalette.disabled=true;iterSlider.disabled=true;itersInput.disabled=true;showAxesBox.disabled=true;smoothBox.disabled=true;jumpSelect.disabled=true;workingText.innerHTML="";workingText.style.visibility="visible";mc.style.borderColor="black";mc.style.outline="5px solid gray";logText.innerHTML="<i>Rendering poster...</i>";ultraCanvas=document.createElement('canvas');ultraCanvasCtx=ultraCanvas.getContext("2d",{alpha:false});ultraCanvas.width=ultraWidth;ultraCanvas.height=ultraHeight;ultraScaledCanvas=document.createElement('canvas');ultraScaledCanvasCtx=ultraScaledCanvas.getContext("2d",{alpha:false});ultraScaledCanvas.width=Math.floor(ultraWidth/2);ultraScaledCanvas.height=Math.floor(ultraHeight/2);var ultraMandel=new Array();var ultraSmoothMandel=new Array();var lscreenX=screenX*ultraWidth/canvasWidth;var lscreenY=screenY*ultraHeight/canvasHeight;var lzoom=zoom*ultraHeight/canvasHeight;for(var i=0;i<workers;i++){ultraMandel[i]=new Uint8Array(Math.floor(ultraWidth*ultraHeight/workers));}if(smooth==1){for(var i=0;i<workers;i++){ultraSmoothMandel[i]=new Uint8Array(Math.floor(ultraWidth*ultraHeight/workers));}}
-else{for(var i=0;i<workers;i++){ultraSmoothMandel[i]=new Uint8Array(1);}}
-workersRunning=0;for(i=0;i<workers;i++){percentDone[i]=0;workersRunning++;startLine=Math.floor(ultraHeight/workers)*i;computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onUltraComputeEnded;computeWorker[i].postMessage({mandelBuffer:ultraMandel[i].buffer,smoothMandel:ultraSmoothMandel[i].buffer,workerID:i,startLine:startLine,blockSize:1,canvasWidth:ultraWidth,segmentHeight:ultraHeight/workers,screenX:lscreenX,screenY:lscreenY,zoom:lzoom,iterations:iterations,smooth:smooth},[ultraMandel[i].buffer],[ultraSmoothMandel[i].buffer]);}}
+return 1;posterTime=performance.now();mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);needRedraw=1;document.getElementById("poster").innerHTML="Cancel";document.getElementById("save").disabled=true;document.getElementById("cycle").disabled=true;nextPalette.disabled=true;prevPalette.disabled=true;iterSlider.disabled=true;itersInput.disabled=true;showAxesBox.disabled=true;smoothBox.disabled=true;jumpSelect.disabled=true;workingText.innerHTML="";workingText.style.visibility="visible";mc.style.borderColor="black";mc.style.outline="5px solid gray";logText.innerHTML="<i>Rendering poster...</i>";ultraCanvas=document.createElement('canvas');ultraCanvasCtx=ultraCanvas.getContext("2d",{alpha:false});ultraCanvas.width=ultraWidth;ultraCanvas.height=ultraHeight;ultraScaledCanvas=document.createElement('canvas');ultraScaledCanvasCtx=ultraScaledCanvas.getContext("2d",{alpha:false});ultraScaledCanvas.width=Math.floor(ultraWidth/2);ultraScaledCanvas.height=Math.floor(ultraHeight/2);var ultraMandel=new Uint8Array(ultraWidth*ultraHeight);var ultraSmoothMandel;var lscreenX=screenX*ultraWidth/canvasWidth;var lscreenY=screenY*ultraHeight/canvasHeight;var lzoom=zoom*ultraHeight/canvasHeight;if(smooth==1){ultraSmoothMandel=new Uint8Array(ultraWidth*ultraHeight);}
+else{ultraSmoothMandel=new Uint8Array(1);}
+workersRunning=0;percentDone=0;workersRunning++;startLine=0;computeWorker=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker.onmessage=onUltraComputeEnded;computeWorker.postMessage({mandelBuffer:ultraMandel.buffer,smoothMandel:ultraSmoothMandel.buffer,workerID:0,startLine:startLine,blockSize:1,canvasWidth:ultraWidth,segmentHeight:ultraHeight,screenX:lscreenX,screenY:lscreenY,zoom:lzoom,iterations:iterations,smooth:smooth},[ultraMandel.buffer],[ultraSmoothMandel.buffer]);}
 vga=[0,43520,11141120,11184640,2852126720,2852170240,2857697280,2863311360,1431655680,1431699200,1442796800,1442840320,4283782400,4283825920,4294923520,4294967040,0,336860160,538976256,741092352,943208448,1162167552,1364283648,1633771776,1903259904,2189591040,2459079168,2728567296,3065427456,3419130624,3823362816,4294967040,65280,1090584320,2097217280,3187736320,4278255360,4278238720,4278222080,4278206720,4278190080,4282449920,4286382080,4290641920,4294901760,3204382720,2113863680,1107230720,16711680,16728320,16743680,16760320,16776960,12517120,8257280,4325120,2105409280,2659057408,3195928320,3749576448,4286447360,4286439168,4286430720,4286422528,4286414080,4288576768,4290673920,4292836608,4294933760,3758062848,3204414720,2667543808,2113895680,2113904128,2113912320,2113920768,2113928960,2111831808,2109669120,2107571968,3065446144,3350658816,3686203136,3954638592,4290182912,4290177792,4290173696,4290168576,4290164224,4291278336,4292589056,4293637632,4294948352,3959404032,3690968576,3355424256,3070211584,3070215936,3070221056,3070225152,3070230272,3068919552,3067870976,3066560256,28928,469790976,939553024,1426092288,1895854336,1895847168,1895839744,1895832576,1895825408,1897660416,1899495424,1901395968,1903230976,1433468928,946929664,477167616,7405568,7412736,7419904,7427328,7434496,5599488,3698944,1863936,943223040,1161326848,1429762304,1631088896,1899524352,1899520256,1899517184,1899513088,1899509760,1900361728,1901410304,1902196736,1903245312,1634809856,1433483264,1165047808,946944000,946947328,946951424,946954496,946958592,945910016,945123584,944075008,1364291840,1498509568,1632727296,1766945024,1901162752,1901160704,1901158656,1901156608,1901154560,1901678848,1902203136,1902727424,1903251712,1769033984,1634816256,1500598528,1366380800,1366382848,1366384896,1366386944,1366388992,1365864704,1365340416,1364816128,16640,268452096,536887552,805323008,1090535680,1090531328,1090527232,1090523136,1090519040,1091567616,1092616192,1093664768,1094778880,809566208,541130752,272695296,4259840,4263936,4268032,4272128,4276480,3162368,2113792,1065216,538984704,673202432,807420160,941637888,1092632832,1092630528,1092628480,1092626432,1092624384,1093148672,1093672960,1094197248,1094787072,943792128,809574400,675356672,541138944,541140992,541143040,541145088,541147392,540557568,540033280,539508992,741097728,808206592,875315456,1009533184,1093419264,1093417984,1093415936,1093414912,1093413888,1093676032,1093938176,1094462464,1094790144,1010904064,876686336,809577472,742468608,742469632,742470656,742472704,742473984,742146304,741622016,741359872,0,0,0,0,0,0,0,0,];function toggleRotatePalette()
 {if(travelling>0)
 return;rotating=1-rotating;if(rotating){cycleText.innerHTML="Stop";}else{cycleText.innerHTML="Animate";startRender(0,0);}}
@@ -274,8 +270,8 @@ document.body.onmousedown=function(e)
 {mousePressed=1;eventTime=performance.now();}
 document.body.onmousemove=mouseMove;
 document.body.onmouseup=function()
-{mousePressed=0;oldMouseX=-1;oldMouseY=-1;for(i=0;i<workers;i++)
-if(blockSize[i]>1)
+{mousePressed=0;oldMouseX=-1;oldMouseY=-1;
+if(blockSize>1)
 startRender(1,1);}
 function pointOnScreen(x,y)
 {var destXscreen=x*zoom+screenX;var destYscreen=y*zoom+screenY;if((destXscreen>0)&&(destXscreen<canvasWidth)&&(destYscreen>0)&&(destYscreen<canvasHeight))
@@ -285,46 +281,39 @@ var onOneShotComputeEnded=function(e)
 {var itersToPrint=e.data.oneShotResult;if(itersToPrint==iterations)
 itersToPrint="n/a";mandelText.textContent=itersToPrint;}
 var onComputeEnded=function(e)
-{if(!e.data.finished){if(blockSize[e.data.workerID]==1){percentDone[e.data.workerID]=Math.round(e.data.lineCount/(canvasHeight/workers)*100);var totalProgress=0;for(var j=0;j<workers;j++){totalProgress+=percentDone[j];}progress=Math.floor(totalProgress/workers);workingText.innerHTML="<i>"+progress+"%</i>";}
+{if(!e.data.finished){if(blockSize==1){percentDone=Math.round(e.data.lineCount/canvasHeight*100);workingText.innerHTML="<i>"+percentDone+"%</i>";}
 return 1;}
-var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;
+var workerID=e.data.workerID;computeWorkerRunning=false;
 
 // Always use unified WASM rendering - RGBA data directly from compute worker
 var rgbaData=new Uint8ClampedArray(e.data.mandel);
 
-if(blockSize[workerID]==1){
+if(blockSize==1){
     // Fine rendering - put RGBA data directly to canvas
-    mSegment[workerID].data.set(rgbaData);
-    finished[workerID]=1;
-    var lstartLine=Math.floor(workerID*chunkHeight);
-    offScreenSegmentCtx[workerID].putImageData(mSegment[workerID],0,0);
-    offScreenCtx.drawImage(offScreenSegment[workerID],0,lstartLine);
+    mSegment.data.set(rgbaData);
+    finished=true;
+    var lstartLine=0; // Single worker starts at line 0
+    offScreenSegmentCtx.putImageData(mSegment,0,0);
+    offScreenCtx.drawImage(offScreenSegment,0,lstartLine);
 } else {
     // Coarse rendering - put RGBA data to coarse canvas  
-    mCoarseSegment[workerID].data.set(rgbaData);
-    finished[workerID]=1;
-    var lstartLine=Math.floor(workerID*chunkHeight/2);
-    coarseSegmentCtx[workerID].putImageData(mCoarseSegment[workerID],0,0);
-    coarseCtx.drawImage(coarseSegment[workerID],0,lstartLine);
+    mCoarseSegment.data.set(rgbaData);
+    finished=true;
+    var lstartLine=0; // Single worker starts at line 0
+    coarseSegmentCtx.putImageData(mCoarseSegment,0,0);
+    coarseCtx.drawImage(coarseSegment,0,lstartLine);
     mctx.drawImage(coarse,0,0);
 }
 
 // No render step needed - compute worker provided RGBA directly
 workersRunning--;
 
-// Check if all workers are done (moved from onRenderEnded)
+// Check if worker is done (simplified from multi-worker logic)
 if(workersRunning==0){
-    var allFinished=true;
-    for(var i=0;i<workers;i++){
-        if(!finished[i]){
-            allFinished=false;
-            break;
-        }
-    }
-    if((!eventOccurred)&&(allFinished)){
+    if((!eventOccurred)&&(finished)){
         needRedraw=0;
         // Only draw offScreen canvas in fine mode (blockSize==1), coarse mode already drew to main canvas
-        if(blockSize[0]==1){
+        if(blockSize==1){
             mctx.drawImage(offScreen,0,0);
         }
         if(!rotating){
@@ -395,21 +384,21 @@ function startRender(lneedRecompute,blocky)
 {workingText.innerHTML="";workingText.style.visibility="visible";if(rotating)
 logText.innerHTML="<i>Cycling colours...</i>";else
 logText.innerHTML="<i>Working...</i>";itersInput.value=iterations;zoomText.textContent=Math.floor(zoom);mc.style.borderColor="black";mc.style.outline="5px solid gray";if(lneedRecompute){rotating=0;cycleText.innerHTML="Animate";}
-for(i=0;i<workers;i++){needToRun[i]=1;finished[i]=0;percentDone[i]=0;if((lneedRecompute==1)&&(blocky==1))
-blockSize[i]=maxBlockSize;else
-blockSize[i]=1;}
+needToRun=true;finished=false;percentDone=0;if((lneedRecompute==1)&&(blocky==1))
+blockSize=maxBlockSize;else
+blockSize=1;
 needRedraw=1;needRecompute=lneedRecompute;eventOccurred=0;start=performance.now();rotationFrameStart=start;requestAnimationFrame(drawMandel);}
 function drawMandel()
 {const iter_max=iterations;const lcanvasWidth=canvasWidth;const lcanvasHeight=canvasHeight;const lscreenX=screenX;const lscreenY=screenY;const lzoom=zoom;if((rotating)&&(performance.now()<rotationFrameStart+15)){requestAnimationFrame(drawMandel);return 1;}
 rotationFrameStart=performance.now();if((!startupAnim)&&(!autotuneIterations)&&(iterations!=iterSlider.value)){iterations=Math.floor(iterSlider.value);startRender(1,1);needRedraw=1;}
-for(i=0;i<workers;i++)
-if((blockSize[i]>1)&&(performance.now()>zoomTime+500))
-needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((needToRun[i]==1)&&(!eventOccurred)){if(computeWorkerRunning[i]){continue;}
+if((blockSize>1)&&(performance.now()>zoomTime+500))
+needRedraw=1;if(needRedraw){startLine=0; // Single worker starts at line 0
+if((needToRun==true)&&(!eventOccurred)){if(computeWorkerRunning){return 1;} // Skip if worker is already running
 // Always use WASM unified rendering - no separate render step needed
-if(!computeWorker[i]){computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onComputeEnded;}
-workersRunning++;computeWorkerRunning[i]=1;console.log(`Starting worker ${i} with zoom=${zoom}, screenX=${screenX}, screenY=${screenY}`);if(blockSize[i]==1)
-computeWorker[i].postMessage({workerID:i,startLine:startLine,canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0});else
-computeWorker[i].postMessage({workerID:i,startLine:startLine/2,canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/2,screenY:screenY/2,zoom:zoom/2,iterations:iterations,oneShot:0});}}}
+if(!computeWorker){computeWorker=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker.onmessage=onComputeEnded;}
+workersRunning++;computeWorkerRunning=true;console.log(`Starting worker 0 with zoom=${zoom}, screenX=${screenX}, screenY=${screenY}`);if(blockSize==1)
+computeWorker.postMessage({workerID:0,startLine:startLine,canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0});else
+computeWorker.postMessage({workerID:0,startLine:startLine/2,canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/2,screenY:screenY/2,zoom:zoom/2,iterations:iterations,oneShot:0});}}
 if((workersRunning==0)&&(rotating==1))
 rotatePalette(-1);else if((workersRunning>0||rotating==1)&&needRedraw==1)
 requestAnimationFrame(drawMandel);}
