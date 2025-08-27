@@ -70,11 +70,24 @@ function wasmMandelCompute(e) {
         try {
             // Generate a 1x1 image for the single point
             const result = wasmModule.mandel_generate_image(x_norm, y_norm, zoom, iter_max, 1, 1, 0);
-            const imageData = new Uint8Array(result);
+            const imageData = new Uint8Array(result.data);
             // Convert grayscale back to iteration count approximation
-            // Grayscale: 0=interior (max iterations), 255=fast escape (low iterations)
+            // With dynamic range, we need to use the actual min/max from the result
             const grayscaleValue = imageData[0];
-            const oneShotResult = grayscaleValue === 0 ? iter_max : Math.round((255 - grayscaleValue) / 255.0 * iter_max);
+            const minIter = result.min_iter;
+            const maxIter = result.max_iter;
+            
+            let oneShotResult;
+            if (grayscaleValue === 0) {
+                oneShotResult = iter_max; // Interior point
+            } else if (maxIter === minIter) {
+                oneShotResult = minIter; // Single iteration value
+            } else {
+                // Reverse the dynamic range mapping: grayscale 255 = minIter, grayscale 0 = maxIter
+                const normalized = (255 - grayscaleValue) / 255.0;
+                oneShotResult = Math.round(minIter + normalized * (maxIter - minIter));
+            }
+            
             self.postMessage({ oneShotResult: oneShotResult, usedWasm: true });
             return;
         } catch (error) {
