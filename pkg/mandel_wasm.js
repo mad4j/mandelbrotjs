@@ -34,6 +34,7 @@ let wasm_bindgen;
      * Uses center coordinates in the complex plane, zoom level, max iterations and image dimensions
      * start_line parameter defines the vertical offset for this image segment
      * width is the canvas width, height is the segment height
+     * Returns result with data and min/max iteration values for dynamic color mapping
      * @param {number} center_x
      * @param {number} center_y
      * @param {number} zoom
@@ -41,18 +42,16 @@ let wasm_bindgen;
      * @param {number} width
      * @param {number} height
      * @param {number} start_line
-     * @returns {Uint8Array}
+     * @returns {MandelbrotResult}
      */
     __exports.mandel_generate_image = function(center_x, center_y, zoom, max_iterations, width, height, start_line) {
         const ret = wasm.mandel_generate_image(center_x, center_y, zoom, max_iterations, width, height, start_line);
-        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        return v1;
+        return MandelbrotResult.__wrap(ret);
     };
 
     /**
      * WASM function for direct RGBA image generation (for rendering pipeline)
-     * Produces RGBA pixel data ready for ImageBitmap creation
+     * Produces RGBA pixel data ready for ImageBitmap creation with dynamic color mapping
      * @param {number} center_x
      * @param {number} center_y
      * @param {number} zoom
@@ -68,6 +67,59 @@ let wasm_bindgen;
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
     };
+
+    const MandelbrotResultFinalization = (typeof FinalizationRegistry === 'undefined')
+        ? { register: () => {}, unregister: () => {} }
+        : new FinalizationRegistry(ptr => wasm.__wbg_mandelbrotresult_free(ptr >>> 0, 1));
+    /**
+     * Result structure for Mandelbrot computation with min/max iteration tracking
+     */
+    class MandelbrotResult {
+
+        static __wrap(ptr) {
+            ptr = ptr >>> 0;
+            const obj = Object.create(MandelbrotResult.prototype);
+            obj.__wbg_ptr = ptr;
+            MandelbrotResultFinalization.register(obj, obj.__wbg_ptr, obj);
+            return obj;
+        }
+
+        __destroy_into_raw() {
+            const ptr = this.__wbg_ptr;
+            this.__wbg_ptr = 0;
+            MandelbrotResultFinalization.unregister(this);
+            return ptr;
+        }
+
+        free() {
+            const ptr = this.__destroy_into_raw();
+            wasm.__wbg_mandelbrotresult_free(ptr, 0);
+        }
+        /**
+         * @returns {Uint8Array}
+         */
+        get data() {
+            const ret = wasm.mandelbrotresult_data(this.__wbg_ptr);
+            var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+            return v1;
+        }
+        /**
+         * @returns {number}
+         */
+        get min_iter() {
+            const ret = wasm.mandelbrotresult_min_iter(this.__wbg_ptr);
+            return ret;
+        }
+        /**
+         * @returns {number}
+         */
+        get max_iter() {
+            const ret = wasm.mandelbrotresult_max_iter(this.__wbg_ptr);
+            return ret;
+        }
+    }
+    __exports.MandelbrotResult = MandelbrotResult;
 
     async function __wbg_load(module, imports) {
         if (typeof Response === 'function' && module instanceof Response) {
@@ -115,6 +167,9 @@ let wasm_bindgen;
             table.set(offset + 2, true);
             table.set(offset + 3, false);
             ;
+        };
+        imports.wbg.__wbindgen_throw = function(arg0, arg1) {
+            throw new Error(getStringFromWasm0(arg0, arg1));
         };
 
         return imports;
