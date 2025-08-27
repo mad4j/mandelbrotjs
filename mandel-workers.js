@@ -6,7 +6,14 @@ console.log('Using WASM compute worker:', COMPUTE_WORKER_SCRIPT);
 const USE_WASM_UNIFIED_RENDERING = true;
 console.log('WASM unified rendering:', USE_WASM_UNIFIED_RENDERING ? 'ENABLED (computation + rendering in one step)' : 'DISABLED (separate render step)');
 
-var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;const startZoom=300;zoom=startZoom;var startupTick=0;var startupAnim=1;const minZoom=100;const maxZoom=2000000000000000;const canvasWidth=600;const canvasHeight=600;const scaleFactor=1;const coarseWidth=canvasWidth/2;const coarseHeight=canvasHeight/2;var eventOccurred=0;
+var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;const startZoom=300;zoom=startZoom;var startupTick=0;var startupAnim=1;const minZoom=100;const maxZoom=2000000000000000;
+// Dynamic canvas dimensions based on window size
+var canvasWidth=window.innerWidth;
+var canvasHeight=window.innerHeight;
+const scaleFactor=1;
+var coarseWidth=Math.floor(canvasWidth/2);
+var coarseHeight=Math.floor(canvasHeight/2);
+var eventOccurred=0;
 // Set initial position to show classic Mandelbrot view centered at (-0.5, 0) in complex plane
 // For center_x = -0.5: (canvasWidth/2 - screenX) / zoom = -0.5
 // So screenX = canvasWidth/2 - (-0.5 * zoom) = canvasWidth/2 + (0.5 * zoom)
@@ -36,9 +43,77 @@ for(var i=0; i<workers; i++) { blockSize[i]=16; }
 var colours=new Uint32Array(256);var vga=new Uint32Array(256);const paletteCount=13;var currentPalette=-1;var currentRotation=0;var rotating=0;var renderCount=0;var travelling=0;var movingToSaved=0;var destX=0;var destY=0;var destZoom=0;var destIters=0;var computeWorker=new Array();var computeWorkerRunning=new Uint8Array(workers);var needToRun=new Uint8Array(workers);var finished=new Uint8Array(workers);var timesTaken=new Array(20);var timesTakenSorted=new Array(20);var benchmarkTime=2;
 // Legacy variables - kept for compatibility but no longer populated with WASM unified rendering
 var mandel=new Array();var smoothMandel=new Array();var percentDone=new Array();
-for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;const chunkHeight=canvasHeight/workers;var needRedraw=0;var needRecompute=1;var showAxes=0;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var smoothBox=document.getElementById("smooth");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});offScreen.width=canvasWidth;offScreen.height=canvasHeight;var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});coarse.width=coarseWidth;coarse.height=coarseHeight;var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();
-for(i=0;i<workers;i++){computeWorkerRunning[i]=0;offScreenSegment[i]=document.createElement('canvas');offScreenSegmentCtx[i]=offScreenSegment[i].getContext("2d",{alpha:false});offScreenSegment[i].width=canvasWidth;offScreenSegment[i].height=canvasHeight/workers;mSegment[i]=offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,canvasHeight/workers);mdSegment[i]=new Uint8ClampedArray(canvasWidth*canvasHeight/workers*4);mdSegment[i].set(mSegment[i].data);coarseSegment[i]=document.createElement('canvas');coarseSegmentCtx[i]=coarseSegment[i].getContext("2d",{alpha:false});coarseSegment[i].width=coarseWidth;coarseSegment[i].height=coarseHeight/workers;mCoarseSegment[i]=coarseSegmentCtx[i].getImageData(0,0,coarseWidth,coarseHeight/workers);mdCoarseSegment[i]=mCoarseSegment[i].data;mandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));percentDone[i]=0;}
-var zoomSlider;var oldMouseX=-1;var oldMouseX=-1;var worker=0;mc.addEventListener("touchstart",touchStart,false);mc.addEventListener("touchmove",touchMove,false);mc.addEventListener("touchend",touchEnd,false);window.addEventListener("resize",setViewport,false);function setViewport()
+for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;
+// Dynamic chunk height calculation
+var chunkHeight=Math.floor(canvasHeight/workers);
+var needRedraw=0;var needRecompute=1;var showAxes=0;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var smoothBox=document.getElementById("smooth");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();
+// Initialize canvas-dependent objects after dimensions are set
+// This will be called by updateCanvasDimensions() during setup
+// Function to update canvas dimensions and reinitialize canvas-dependent objects
+function updateCanvasDimensions() {
+    // Update dimensions
+    canvasWidth = window.innerWidth;
+    canvasHeight = window.innerHeight;
+    coarseWidth = Math.floor(canvasWidth/2);
+    coarseHeight = Math.floor(canvasHeight/2);
+    chunkHeight = Math.floor(canvasHeight/workers);
+    
+    // Update offScreen and coarse canvases
+    offScreen.width = canvasWidth;
+    offScreen.height = canvasHeight;
+    coarse.width = coarseWidth;
+    coarse.height = coarseHeight;
+    
+    // Initialize or reinitialize worker segments with new dimensions
+    for(var i=0; i<workers; i++) {
+        computeWorkerRunning[i]=0;
+        
+        // Create or update segment canvases
+        if(!offScreenSegment[i]) {
+            offScreenSegment[i] = document.createElement('canvas');
+            offScreenSegmentCtx[i] = offScreenSegment[i].getContext("2d",{alpha:false});
+        }
+        offScreenSegment[i].width = canvasWidth;
+        offScreenSegment[i].height = chunkHeight;
+        mSegment[i] = offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,chunkHeight);
+        mdSegment[i] = new Uint8ClampedArray(canvasWidth*chunkHeight*4);
+        mdSegment[i].set(mSegment[i].data);
+        
+        if(!coarseSegment[i]) {
+            coarseSegment[i] = document.createElement('canvas');
+            coarseSegmentCtx[i] = coarseSegment[i].getContext("2d",{alpha:false});
+        }
+        coarseSegment[i].width = coarseWidth;
+        coarseSegment[i].height = Math.floor(coarseHeight/workers);
+        mCoarseSegment[i] = coarseSegmentCtx[i].getImageData(0,0,coarseWidth,Math.floor(coarseHeight/workers));
+        mdCoarseSegment[i] = mCoarseSegment[i].data;
+        
+        // Update legacy arrays (though not used in WASM rendering)
+        mandel[i] = new Uint8Array(canvasWidth*chunkHeight);
+        smoothMandel[i] = new Uint8Array(canvasWidth*chunkHeight);
+        percentDone[i] = 0;
+        
+        // Initialize alpha channel for new segments
+        for(let y=0; y<chunkHeight; y++){
+            for(let x=0; x<canvasWidth; x++){
+                let pixelPos=(x+y*canvasWidth)*4;
+                if(pixelPos + 3 < mdSegment[i].length) {
+                    mdSegment[i][pixelPos+3]=255;
+                }
+            }
+        }
+        for(let y=0; y<Math.floor(coarseHeight/workers); y++){
+            for(let x=0; x<coarseWidth; x++){
+                let pixelPos=(x+y*coarseWidth)*4;
+                if(pixelPos + 3 < mdCoarseSegment[i].length) {
+                    mdCoarseSegment[i][pixelPos+3]=255;
+                }
+            }
+        }
+    }
+}
+
+var zoomSlider;var oldMouseX=-1;var oldMouseX=-1;var worker=0;mc.addEventListener("touchstart",touchStart,false);mc.addEventListener("touchmove",touchMove,false);mc.addEventListener("touchend",touchEnd,false);window.addEventListener("resize",function(){setViewport();updateCanvasDimensions();startRender(1,1);},false);function setViewport()
 {var ww=window.screen.width;var cw=canvasWidth/2+50;if(ww<cw){var ratio=ww/cw;viewportTag.setAttribute("content","width="+ww+",initial-scale="+ratio);document.body.style.fontSize=Math.floor(70/ratio)+"%";var checkBoxes=document.querySelectorAll("input[type=checkbox]");var checkBoxCount=checkBoxes.length;for(var i=0;i<checkBoxCount;i++)
 checkBoxes[i].style.transform="scale("+0.7/ratio+")";}
 else{viewportTag.setAttribute("content","width="+ww+",initial-scale=1.0");}}
@@ -315,9 +390,7 @@ function touchEnd(event)
 function updateCoords(x,y,source)
 {var xnorm=Math.floor((x-screenX)/zoom*1000000000)/1000000000;var ynorm=Math.floor((y-screenY)/zoom*1000000000)/1000000000;xmouse=xnorm;ymouse=ynorm;xPosText.value=''+xnorm;yPosText.value=''+-ynorm;coordSourceText.textContent=" "+source;coordSource2Text.textContent=" "+source;oneShotWorker.postMessage({oneShot:1,x:x,y:y,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,smooth:0});}
 function setup()
-{setViewport();showAxesBox.checked=false;smoothBox.checked=true;incrPalette();needRedraw=0;loadState();zoomText.textContent=Math.floor(zoom);oneShotWorker=new Worker(COMPUTE_WORKER_SCRIPT);oneShotWorker.onmessage=onOneShotComputeEnded;for(let i=0;i<workers;i++){for(let y=0;y<canvasHeight/workers;y++){for(let x=0;x<canvasWidth;x++){let pixelPos=(x+y*canvasWidth)*4;mdSegment[i][pixelPos+3]=255;}}
-for(let y=0;y<coarseHeight/workers;y++){for(let x=0;x<coarseWidth;x++){let pixelPos=(x+y*coarseWidth)*4;mdCoarseSegment[i][pixelPos+3]=255;}}}
-eventTime=performance.now();needRedraw=1;toggleSmooth();startRender(1,1);}
+{setViewport();updateCanvasDimensions();showAxesBox.checked=false;smoothBox.checked=true;incrPalette();needRedraw=0;loadState();zoomText.textContent=Math.floor(zoom);oneShotWorker=new Worker(COMPUTE_WORKER_SCRIPT);oneShotWorker.onmessage=onOneShotComputeEnded;eventTime=performance.now();needRedraw=1;toggleSmooth();startRender(1,1);}
 function startRender(lneedRecompute,blocky)
 {workingText.innerHTML="";workingText.style.visibility="visible";if(rotating)
 logText.innerHTML="<i>Cycling colours...</i>";else

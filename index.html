@@ -196,6 +196,11 @@
 		// Set internal size to match display size for crisp rendering
 		canvas.width = width;
 		canvas.height = height;
+		
+		// Update mandel-workers.js canvas dimensions and trigger re-render
+		if (typeof updateCanvasDimensions === 'function') {
+			updateCanvasDimensions();
+		}
 	}
 	
 	// Update info display
@@ -241,7 +246,13 @@
 	}
 
 	// Initialize responsive canvas
-	window.addEventListener('resize', resizeCanvas);
+	window.addEventListener('resize', function() {
+		resizeCanvas();
+		// Trigger re-render after resize
+		if (typeof startRender === 'function') {
+			startRender(1, 1);
+		}
+	});
 	document.getElementById('resetBtn').addEventListener('click', resetView);
 	
 	// Auto-hide info display
