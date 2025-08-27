@@ -14,6 +14,10 @@ const scaleFactor=1;
 var coarseWidth=Math.floor(canvasWidth/2);
 var coarseHeight=Math.floor(canvasHeight/2);
 var eventOccurred=0;
+// Coarse mode timing variables for animation sequences
+var coarseModeTimer=null;
+var isInCoarseMode=false;
+var coarseModeDelay=300; // ms to wait before switching back to fine mode
 // Set initial position to show classic Mandelbrot view centered at (-0.5, 0) in complex plane
 // For center_x = -0.5: (canvasWidth/2 - screenX) / zoom = -0.5
 // So screenX = canvasWidth/2 - (-0.5 * zoom) = canvasWidth/2 + (0.5 * zoom)
@@ -215,7 +219,12 @@ else{ultraSmoothMandel=new Uint8Array(1);}
 workersRunning=0;percentDone=0;workersRunning++;startLine=0;computeWorker=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker.onmessage=onUltraComputeEnded;computeWorker.postMessage({mandelBuffer:ultraMandel.buffer,smoothMandel:ultraSmoothMandel.buffer,workerID:0,startLine:startLine,blockSize:1,canvasWidth:ultraWidth,segmentHeight:ultraHeight,screenX:lscreenX,screenY:lscreenY,zoom:lzoom,iterations:iterations,smooth:smooth},[ultraMandel.buffer],[ultraSmoothMandel.buffer]);}
 vga=[0,43520,11141120,11184640,2852126720,2852170240,2857697280,2863311360,1431655680,1431699200,1442796800,1442840320,4283782400,4283825920,4294923520,4294967040,0,336860160,538976256,741092352,943208448,1162167552,1364283648,1633771776,1903259904,2189591040,2459079168,2728567296,3065427456,3419130624,3823362816,4294967040,65280,1090584320,2097217280,3187736320,4278255360,4278238720,4278222080,4278206720,4278190080,4282449920,4286382080,4290641920,4294901760,3204382720,2113863680,1107230720,16711680,16728320,16743680,16760320,16776960,12517120,8257280,4325120,2105409280,2659057408,3195928320,3749576448,4286447360,4286439168,4286430720,4286422528,4286414080,4288576768,4290673920,4292836608,4294933760,3758062848,3204414720,2667543808,2113895680,2113904128,2113912320,2113920768,2113928960,2111831808,2109669120,2107571968,3065446144,3350658816,3686203136,3954638592,4290182912,4290177792,4290173696,4290168576,4290164224,4291278336,4292589056,4293637632,4294948352,3959404032,3690968576,3355424256,3070211584,3070215936,3070221056,3070225152,3070230272,3068919552,3067870976,3066560256,28928,469790976,939553024,1426092288,1895854336,1895847168,1895839744,1895832576,1895825408,1897660416,1899495424,1901395968,1903230976,1433468928,946929664,477167616,7405568,7412736,7419904,7427328,7434496,5599488,3698944,1863936,943223040,1161326848,1429762304,1631088896,1899524352,1899520256,1899517184,1899513088,1899509760,1900361728,1901410304,1902196736,1903245312,1634809856,1433483264,1165047808,946944000,946947328,946951424,946954496,946958592,945910016,945123584,944075008,1364291840,1498509568,1632727296,1766945024,1901162752,1901160704,1901158656,1901156608,1901154560,1901678848,1902203136,1902727424,1903251712,1769033984,1634816256,1500598528,1366380800,1366382848,1366384896,1366386944,1366388992,1365864704,1365340416,1364816128,16640,268452096,536887552,805323008,1090535680,1090531328,1090527232,1090523136,1090519040,1091567616,1092616192,1093664768,1094778880,809566208,541130752,272695296,4259840,4263936,4268032,4272128,4276480,3162368,2113792,1065216,538984704,673202432,807420160,941637888,1092632832,1092630528,1092628480,1092626432,1092624384,1093148672,1093672960,1094197248,1094787072,943792128,809574400,675356672,541138944,541140992,541143040,541145088,541147392,540557568,540033280,539508992,741097728,808206592,875315456,1009533184,1093419264,1093417984,1093415936,1093414912,1093413888,1093676032,1093938176,1094462464,1094790144,1010904064,876686336,809577472,742468608,742469632,742470656,742472704,742473984,742146304,741622016,741359872,0,0,0,0,0,0,0,0,];function toggleRotatePalette()
 {if(travelling>0)
-return;rotating=1-rotating;if(rotating){cycleText.innerHTML="Stop";}else{cycleText.innerHTML="Animate";startRender(0,0);}}
+return;rotating=1-rotating;if(rotating){
+// Enable coarse mode for color cycling animation
+enableCoarseMode();cycleText.innerHTML="Stop";}else{
+// Disable coarse mode when stopping color cycling, but render fine immediately
+isInCoarseMode=false;if(coarseModeTimer){clearTimeout(coarseModeTimer);}
+cycleText.innerHTML="Animate";startRender(0,0);}}
 function rotatePalette(steps)
 {if(needRedraw)
 return 1;var i;var j;var lsteps;if(steps==-1)
@@ -283,12 +292,22 @@ document.body.onmousedown=function(e)
 document.body.onmousemove=mouseMove;
 document.body.onmouseup=function()
 {mousePressed=0;oldMouseX=-1;oldMouseY=-1;
+// Schedule switch to fine mode after mouse release
+scheduleFineModeSwitch();
 if(blockSize>1)
 startRender(1,0);}
 function pointOnScreen(x,y)
 {var destXscreen=x*zoom+screenX;var destYscreen=y*zoom+screenY;if((destXscreen>0)&&(destXscreen<canvasWidth)&&(destYscreen>0)&&(destYscreen<canvasHeight))
 return 1;else
 return 0;}
+// Coarse mode management functions for animation sequences
+function enableCoarseMode()
+{if(!isInCoarseMode){isInCoarseMode=true;console.log("Enabling coarse mode for animation");}}
+function scheduleFineModeSwitch()
+{if(coarseModeTimer){clearTimeout(coarseModeTimer);}
+coarseModeTimer=setTimeout(function(){if(isInCoarseMode){isInCoarseMode=false;console.log("Switching back to fine mode");startRender(1,0);}},coarseModeDelay);}
+function shouldUseCoarseMode()
+{return isInCoarseMode;}
 var onOneShotComputeEnded=function(e)
 {var itersToPrint=e.data.oneShotResult;if(itersToPrint==iterations)
 itersToPrint="n/a";mandelText.textContent=itersToPrint;}
@@ -357,7 +376,9 @@ return 1;if(event.deltaY<0)
 zoom+=zoom/5;else
 zoom-=zoom/5;if(zoom>maxZoom)
 zoom=maxZoom;if(zoom<minZoom)
-zoom=minZoom;zoom=Math.floor(zoom);if(autotuneIterations){iterations=calculateAdaptiveIterations(zoom);iterSlider.value=iterations;itersInput.value=iterations;}screenX=Math.round(-xnorm*zoom+mx);screenY=Math.round(-ynorm*zoom+my);eventOccurred=1;killWorkers();startRender(1,0);}
+zoom=minZoom;zoom=Math.floor(zoom);if(autotuneIterations){iterations=calculateAdaptiveIterations(zoom);iterSlider.value=iterations;itersInput.value=iterations;}screenX=Math.round(-xnorm*zoom+mx);screenY=Math.round(-ynorm*zoom+my);eventOccurred=1;killWorkers();
+// Enable coarse mode for wheel zooming and schedule switch back to fine mode
+enableCoarseMode();startRender(1,0);scheduleFineModeSwitch();}
 function mouseMove(event)
 {if((posterTime!=0)||(linkDialog.style.display=="block")||(posterDialog.style.display=="block"))
 return 1;var rect=mc.getBoundingClientRect();var mx=(event.clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-6;var my=(event.clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-6;
@@ -369,7 +390,9 @@ screenX=Math.round(-xnormMin*zoom+canvasWidth/2);if(xnorm>xnormMax)
 screenX=Math.round(-xnormMax*zoom+canvasWidth/2);if(ynorm<ynormMin)
 screenY=Math.round(-ynormMin*zoom+canvasHeight/2);if(ynorm>ynormMax)
 screenY=Math.round(-ynormMax*zoom+canvasHeight/2);}
-oldMouseX=event.clientX;oldMouseY=event.clientY;eventOccurred=1;killWorkers();startRender(1,0);}
+oldMouseX=event.clientX;oldMouseY=event.clientY;eventOccurred=1;killWorkers();
+// Enable coarse mode for mouse dragging and schedule switch back to fine mode
+enableCoarseMode();startRender(1,0);scheduleFineModeSwitch();}
 function touchStart(event)
 {if(posterTime!=0)
 return 1;mousePressed=0;var rect=mc.getBoundingClientRect();var m1x=(event.targetTouches[0].clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-4;var m1y=(event.targetTouches[0].clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-4;}
@@ -381,12 +404,18 @@ return 1;if(pinchRatio>1.0)
 zoom+=Math.floor((pinchRatio*zoom)/50);else
 zoom-=Math.floor((pinchRatio*zoom)/50);if(zoom>maxZoom)
 zoom=maxZoom;if(zoom<minZoom)
-zoom=minZoom;screenX=Math.floor(-xnorm*zoom+centerX);screenY=Math.floor(-ynorm*zoom+centerY);if(autotuneIterations){iterations=calculateAdaptiveIterations(zoom);iterSlider.value=iterations;itersInput.value=iterations;}eventOccurred=1;startRender(1,0);}else
+zoom=minZoom;screenX=Math.floor(-xnorm*zoom+centerX);screenY=Math.floor(-ynorm*zoom+centerY);if(autotuneIterations){iterations=calculateAdaptiveIterations(zoom);iterSlider.value=iterations;itersInput.value=iterations;}eventOccurred=1;
+// Enable coarse mode for touch pinch zooming and schedule switch back to fine mode
+enableCoarseMode();startRender(1,0);scheduleFineModeSwitch();}else
 firstPinchDistance=distanceBetween;}else{var rect=mc.getBoundingClientRect();var mx=(event.targetTouches[0].clientX-rect.left)/(rect.right-rect.left)*rect.width*scaleFactor-4;var my=(event.targetTouches[0].clientY-rect.top)/(rect.bottom-rect.top)*rect.height*scaleFactor-4;if((mx<=0)||(mx>canvasWidth)||(my<=0)||(my>canvasHeight))
 return 1;event.preventDefault();if(oldMouseX!=-1){if(typeof hideInfo==='function'){hideInfo();}var xOffset=(event.targetTouches[0].clientX-oldMouseX)*scaleFactor;var yOffset=(event.targetTouches[0].clientY-oldMouseY)*scaleFactor;screenX+=xOffset;screenY+=yOffset;}
-oldMouseX=event.targetTouches[0].clientX;oldMouseY=event.targetTouches[0].clientY;eventOccurred=1;killWorkers();startRender(1,0);}}
+oldMouseX=event.targetTouches[0].clientX;oldMouseY=event.targetTouches[0].clientY;eventOccurred=1;killWorkers();
+// Enable coarse mode for touch dragging and schedule switch back to fine mode
+enableCoarseMode();startRender(1,0);scheduleFineModeSwitch();}}
 function touchEnd(event)
-{firstPinchDistance=0;mousePressed=0;oldMouseX=-1;oldMouseY=-1;}
+{firstPinchDistance=0;mousePressed=0;oldMouseX=-1;oldMouseY=-1;
+// Schedule switch to fine mode after touch release
+scheduleFineModeSwitch();}
 
 function updateCoords(x,y,source)
 {var xnorm=Math.floor((x-screenX)/zoom*1000000000)/1000000000;var ynorm=Math.floor((y-screenY)/zoom*1000000000)/1000000000;xmouse=xnorm;ymouse=ynorm;xPosText.value=''+xnorm;yPosText.value=''+-ynorm;coordSourceText.textContent=" "+source;coordSource2Text.textContent=" "+source;oneShotWorker.postMessage({oneShot:1,x:x,y:y,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,smooth:0});}
@@ -396,8 +425,13 @@ function startRender(lneedRecompute,blocky)
 {workingText.innerHTML="";workingText.style.visibility="visible";if(rotating)
 logText.innerHTML="<i>Cycling colours...</i>";else
 logText.innerHTML="<i>Working...</i>";itersInput.value=iterations;zoomText.textContent=Math.floor(zoom);mc.style.borderColor="black";mc.style.outline="5px solid gray";if(lneedRecompute){rotating=0;cycleText.innerHTML="Animate";}
-needToRun=true;finished=false;percentDone=0;if((lneedRecompute==1)&&(blocky==1))
-blockSize=maxBlockSize;else
+needToRun=true;finished=false;percentDone=0;
+// Use coarse mode for animation sequences or when explicitly requested
+if((lneedRecompute==1)&&(blocky==1))
+blockSize=maxBlockSize;
+else if(shouldUseCoarseMode()&&(lneedRecompute==1))
+blockSize=maxBlockSize;
+else
 blockSize=1;
 needRedraw=1;needRecompute=lneedRecompute;eventOccurred=0;start=performance.now();rotationFrameStart=start;requestAnimationFrame(drawMandel);}
 function drawMandel()
