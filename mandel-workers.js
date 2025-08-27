@@ -28,15 +28,8 @@ var ynorm=0.0;
 var xmouse=0.0;
 var ymouse=0.0;
 var dLink;
-// Detect optimal worker count based on hardware capabilities
-var workers = (function() {
-    // Use hardware concurrency if available, with reasonable bounds
-    if (navigator.hardwareConcurrency) {
-        return Math.max(2, navigator.hardwareConcurrency-2);
-    }
-    // Fallback to 4 workers for older browsers
-    return 4;
-})();
+// Use single worker thread as requested for visualization
+var workers = 1;
 
 var blockSize=new Uint8Array(workers);
 for(var i=0; i<workers; i++) { blockSize[i]=16; }
