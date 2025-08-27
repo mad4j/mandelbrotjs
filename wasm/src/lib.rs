@@ -56,62 +56,66 @@ pub fn mandel_generate_image(
     log(&format!("WASM: center_x={}, center_y={}, zoom={}, start_line={}, width={}, height={}", 
                  center_x, center_y, zoom, start_line, width, height));
     
-    // Create vectors to hold iteration results and final image data
-    let mut iterations = vec![0i32; total_pixels];
-    let mut buf = vec![0u8; total_pixels];
-
-    // First pass: compute iterations and track min/max
+    // Fast sampling approach: sample a subset of points to estimate iteration range
+    let sample_step = if width > 64 { 8 } else { 4 }; // Adaptive sampling density
     let mut min_iter = max_iterations;
     let mut max_iter = 0;
-
-    // Compute iterations first to find actual min/max range
-    for y in 0..height {
-        for x in 0..width {
-            // Convert pixel coordinates to complex plane coordinates
+    
+    // Sample points across the image to estimate iteration range
+    for y in (0..height).step_by(sample_step as usize) {
+        for x in (0..width).step_by(sample_step as usize) {
             let canvas_x = x as f64;
             let canvas_y = (y + start_line) as f64;
             
-            // Convert to complex plane coordinates centered on center_x, center_y
             let x_norm = center_x + (canvas_x - width as f64 / 2.0) / zoom;
             let y_norm = center_y + (canvas_y - width as f64 / 2.0) / zoom;
             
             let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
-            iterations[(y * width + x) as usize] = iteration;
             
-            // Track min/max iterations for non-interior points
             if iteration < max_iterations {
                 min_iter = min_iter.min(iteration);
                 max_iter = max_iter.max(iteration);
             }
         }
     }
-
-    // Handle edge case where all points are interior
+    
+    // Handle edge case where all sampled points are interior
     if min_iter == max_iterations {
         min_iter = 0;
         max_iter = max_iterations;
     }
-
-    log(&format!("WASM: Computed iteration range: {} to {} (max_iterations: {})", min_iter, max_iter, max_iterations));
-
-    // Second pass: apply dynamic color mapping using actual min/max range
-    for y in 0..height {
-        for x in 0..width {
-            let iteration = iterations[(y * width + x) as usize];
-            
-            let result_value = if iteration == max_iterations {
-                0  // Interior points are black (0)
-            } else if max_iter == min_iter {
-                128  // Single iteration value case - use middle gray
-            } else {
-                // Map iteration count to grayscale using dynamic range
-                let normalized = ((iteration - min_iter) as f64 / (max_iter - min_iter) as f64 * 255.0) as u8;
-                255 - normalized  // Invert so that slower escape = darker
-            };
-            
-            buf[(y * width + x) as usize] = result_value;
-        }
-    }
+    
+    log(&format!("WASM: Sampled iteration range: {} to {} (max_iterations: {})", min_iter, max_iter, max_iterations));
+    
+    // Single-pass computation with immediate dynamic color mapping using sampled range
+    let mut buf = vec![0u8; total_pixels];
+    
+    // Parallelize the computation across rows using Rayon
+    buf.par_chunks_mut(width as usize)
+        .enumerate()
+        .for_each(|(y, row_chunk)| {
+            for x in 0..width {
+                let canvas_x = x as f64;
+                let canvas_y = (y as i32 + start_line) as f64;
+                
+                let x_norm = center_x + (canvas_x - width as f64 / 2.0) / zoom;
+                let y_norm = center_y + (canvas_y - width as f64 / 2.0) / zoom;
+                
+                let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
+                
+                let result_value = if iteration == max_iterations {
+                    0  // Interior points are black (0)
+                } else if max_iter == min_iter {
+                    128  // Single iteration value case - use middle gray
+                } else {
+                    // Map iteration count to grayscale using dynamic range from sampling
+                    let normalized = ((iteration - min_iter) as f64 / (max_iter - min_iter) as f64 * 255.0) as u8;
+                    255 - normalized  // Invert so that slower escape = darker
+                };
+                
+                row_chunk[x as usize] = result_value;
+            }
+        });
         
     // Return result with data and min/max values
     MandelbrotResult {
@@ -136,34 +140,30 @@ pub fn mandel_generate_rgba_image(
     let escape_squared = 4.0f64;
     let total_pixels = (width * height) as usize;
     
-    // First pass: compute iterations and track min/max
-    let mut iterations = vec![0i32; total_pixels];
+    // Fast sampling approach: sample a subset of points to estimate iteration range
+    let sample_step = if width > 64 { 8 } else { 4 }; // Adaptive sampling density
     let mut min_iter = max_iterations;
     let mut max_iter = 0;
-
-    // Compute iterations first to find actual min/max range
-    for y in 0..height {
-        for x in 0..width {
-            // Convert pixel coordinates to complex plane coordinates
+    
+    // Sample points across the image to estimate iteration range
+    for y in (0..height).step_by(sample_step as usize) {
+        for x in (0..width).step_by(sample_step as usize) {
             let canvas_x = x as f64;
             let canvas_y = (y + start_line) as f64;
             
-            // Convert to complex plane coordinates centered on center_x, center_y
             let x_norm = center_x + (canvas_x - width as f64 / 2.0) / zoom;
             let y_norm = center_y + (canvas_y - width as f64 / 2.0) / zoom;
             
             let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
-            iterations[(y * width + x) as usize] = iteration;
             
-            // Track min/max iterations for non-interior points
             if iteration < max_iterations {
                 min_iter = min_iter.min(iteration);
                 max_iter = max_iter.max(iteration);
             }
         }
     }
-
-    // Handle edge case where all points are interior
+    
+    // Handle edge case where all sampled points are interior
     if min_iter == max_iterations {
         min_iter = 0;
         max_iter = max_iterations;
@@ -172,30 +172,38 @@ pub fn mandel_generate_rgba_image(
     // RGBA buffer: 4 bytes per pixel
     let mut buf = vec![0u8; total_pixels * 4];
 
-    // Second pass: apply dynamic color mapping using actual min/max range
-    for y in 0..height {
-        for x in 0..width {
-            let iteration = iterations[(y * width + x) as usize];
-            
-            // Map iteration count to grayscale values using dynamic range
-            let grayscale_value = if iteration == max_iterations {
-                0  // Interior points are black
-            } else if max_iter == min_iter {
-                128  // Single iteration value case - use middle gray
-            } else {
-                // Map iteration count to grayscale using dynamic range
-                let normalized = ((iteration - min_iter) as f64 / (max_iter - min_iter) as f64 * 255.0) as u8;
-                255 - normalized  // Invert so that slower escape = darker
-            };
-            
-            // Set RGBA values (grayscale + full alpha)
-            let pixel_index = ((y * width + x) * 4) as usize;
-            buf[pixel_index] = grayscale_value;     // R
-            buf[pixel_index + 1] = grayscale_value; // G
-            buf[pixel_index + 2] = grayscale_value; // B
-            buf[pixel_index + 3] = 255;             // A (full opacity)
-        }
-    }
+    // Single-pass computation with immediate dynamic color mapping using sampled range
+    buf.par_chunks_mut((width * 4) as usize)
+        .enumerate()
+        .for_each(|(y, row_chunk)| {
+            for x in 0..width {
+                let canvas_x = x as f64;
+                let canvas_y = (y as i32 + start_line) as f64;
+                
+                let x_norm = center_x + (canvas_x - width as f64 / 2.0) / zoom;
+                let y_norm = center_y + (canvas_y - width as f64 / 2.0) / zoom;
+                
+                let iteration = mandel_point_optimized(x_norm, y_norm, max_iterations, escape_squared);
+                
+                // Map iteration count to grayscale values using dynamic range from sampling
+                let grayscale_value = if iteration == max_iterations {
+                    0  // Interior points are black
+                } else if max_iter == min_iter {
+                    128  // Single iteration value case - use middle gray
+                } else {
+                    // Map iteration count to grayscale using dynamic range
+                    let normalized = ((iteration - min_iter) as f64 / (max_iter - min_iter) as f64 * 255.0) as u8;
+                    255 - normalized  // Invert so that slower escape = darker
+                };
+                
+                // Set RGBA values (grayscale + full alpha)
+                let pixel_index = (x * 4) as usize;
+                row_chunk[pixel_index] = grayscale_value;     // R
+                row_chunk[pixel_index + 1] = grayscale_value; // G
+                row_chunk[pixel_index + 2] = grayscale_value; // B
+                row_chunk[pixel_index + 3] = 255;             // A (full opacity)
+            }
+        });
         
     buf.into_boxed_slice()
 }
