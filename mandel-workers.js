@@ -48,12 +48,24 @@ var offScreenSegment=null;var offScreenSegmentCtx=null;var mSegment=null;var mdS
 // This will be called by updateCanvasDimensions() during setup
 // Function to update canvas dimensions and reinitialize canvas-dependent objects
 function updateCanvasDimensions() {
+    // Store old dimensions and center for recalculation
+    const oldCanvasWidth = canvasWidth;
+    const oldCanvasHeight = canvasHeight;
+    
+    // Calculate current fractal center before updating dimensions
+    const currentCenterX = (oldCanvasWidth/2 - screenX) / zoom;
+    const currentCenterY = (oldCanvasHeight/2 - screenY) / zoom;
+    
     // Update dimensions
     canvasWidth = window.innerWidth;
     canvasHeight = window.innerHeight;
     coarseWidth = Math.floor(canvasWidth/2);
     coarseHeight = Math.floor(canvasHeight/2);
     chunkHeight = canvasHeight; // Single worker uses full height
+    
+    // Recalculate screen coordinates to maintain the same fractal center
+    screenX = canvasWidth/2 - (currentCenterX * zoom);
+    screenY = canvasHeight/2 - (currentCenterY * zoom);
     
     // Update offScreen and coarse canvases
     offScreen.width = canvasWidth;
