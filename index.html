@@ -225,7 +225,15 @@
 	// Show info panel after render completion
 	function showInfoAfterRender(renderTimeMs) {
 		updateInfoDisplay();
-		const timeText = (renderTimeMs / 1000).toFixed(1) + 's';
+		// Use appropriate precision for different time ranges
+		let timeText;
+		if (renderTimeMs < 100) {
+			// For times under 100ms, show in milliseconds
+			timeText = Math.round(renderTimeMs) + 'ms';
+		} else {
+			// For times 100ms and above, show in seconds with 1 decimal
+			timeText = (renderTimeMs / 1000).toFixed(1) + 's';
+		}
 		// Include worker count in the time display as requested: 'Time: Ts (N cores)'
 		const workerCount = typeof workers !== 'undefined' ? workers : 4;
 		document.getElementById('renderTime').textContent = timeText + ' (' + workerCount + ' cores)';
