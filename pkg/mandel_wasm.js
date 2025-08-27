@@ -50,6 +50,25 @@ let wasm_bindgen;
         return v1;
     };
 
+    /**
+     * WASM function for direct RGBA image generation (for rendering pipeline)
+     * Produces RGBA pixel data ready for ImageBitmap creation
+     * @param {number} center_x
+     * @param {number} center_y
+     * @param {number} zoom
+     * @param {number} max_iterations
+     * @param {number} width
+     * @param {number} height
+     * @param {number} start_line
+     * @returns {Uint8Array}
+     */
+    __exports.mandel_generate_rgba_image = function(center_x, center_y, zoom, max_iterations, width, height, start_line) {
+        const ret = wasm.mandel_generate_rgba_image(center_x, center_y, zoom, max_iterations, width, height, start_line);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    };
+
     async function __wbg_load(module, imports) {
         if (typeof Response === 'function' && module instanceof Response) {
             if (typeof WebAssembly.instantiateStreaming === 'function') {

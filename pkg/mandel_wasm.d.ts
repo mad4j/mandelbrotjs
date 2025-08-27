@@ -8,6 +8,11 @@ declare namespace wasm_bindgen {
 	 * width is the canvas width, height is the segment height
 	 */
 	export function mandel_generate_image(center_x: number, center_y: number, zoom: number, max_iterations: number, width: number, height: number, start_line: number): Uint8Array;
+	/**
+	 * WASM function for direct RGBA image generation (for rendering pipeline)
+	 * Produces RGBA pixel data ready for ImageBitmap creation
+	 */
+	export function mandel_generate_rgba_image(center_x: number, center_y: number, zoom: number, max_iterations: number, width: number, height: number, start_line: number): Uint8Array;
 	
 }
 
@@ -16,6 +21,7 @@ declare type InitInput = RequestInfo | URL | Response | BufferSource | WebAssemb
 declare interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly mandel_generate_image: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
+  readonly mandel_generate_rgba_image: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
   readonly __wbindgen_export_0: WebAssembly.Table;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_start: () => void;

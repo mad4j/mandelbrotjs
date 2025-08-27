@@ -102,24 +102,21 @@ function wasmMandelCompute(e) {
         const startTime = performance.now();
         
         console.log(`WASM params: center_x=${center_x}, center_y=${center_y}, zoom=${zoom}, startLine=${startLine}, segmentHeight=${segmentHeight}, canvasWidth=${canvasWidth}`);
-        const imageData = wasmModule.mandel_generate_image(center_x, center_y, zoom, iter_max, canvasWidth, segmentHeight, startLine);
-        const mandelData = new Uint8Array(imageData);
         
-        // No smooth data in simplified implementation
-        const smoothMandel = new Uint8Array(1);
+        // Always use unified rendering - generate RGBA data directly
+        const rgbaData = wasmModule.mandel_generate_rgba_image(center_x, center_y, zoom, iter_max, canvasWidth, segmentHeight, startLine);
         
         const computeTime = performance.now() - startTime;
-        console.log(`WASM simplified computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
+        console.log(`WASM unified computation took ${computeTime.toFixed(2)}ms for worker ${workerID}`);
         
+        // Send only RGBA data - no legacy mandel/smoothMandel buffers
         self.postMessage({
             finished: 1,
-            mandel: mandelData.buffer,
+            mandel: rgbaData.buffer,  // RGBA data, not iteration counts
             workerID: workerID,
-            smooth: 0, // No smooth in simplified implementation
-            smoothMandel: smoothMandel.buffer,
             usedWasm: true,
             computeTime: computeTime
-        }, [mandelData.buffer, smoothMandel.buffer]);
+        }, [rgbaData.buffer]);
         
     } catch (error) {
         console.error('WASM simplified computation failed:', error);

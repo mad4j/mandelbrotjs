@@ -185,19 +185,24 @@
 	function resizeCanvas() {
 		const canvas = document.getElementById('mandelCanvas');
 		
-		// Make canvas square using the minimum dimension
-		const size = Math.min(window.innerWidth, window.innerHeight);
+		// Use full window dimensions
+		const width = window.innerWidth;
+		const height = window.innerHeight;
 		
 		// Set display size (css pixels)
-		canvas.style.width = size + 'px';
-		canvas.style.height = size + 'px';
+		canvas.style.width = width + 'px';
+		canvas.style.height = height + 'px';
 		
-		// Set internal size to match mandel-workers.js expectations but with square aspect ratio
-		// Use coarseWidth (600) for both dimensions to maintain square aspect
-		canvas.width = 600;  // coarseWidth from mandel-workers.js (now square)
-		canvas.height = 600; // Make it square
+		// Set internal size to match display size for crisp rendering
+		canvas.width = width;
+		canvas.height = height;
+		
+		// Update mandel-workers.js canvas dimensions and trigger re-render
+		if (typeof updateCanvasDimensions === 'function') {
+			updateCanvasDimensions();
+		}
 	}
-
+	
 	// Update info display
 	function updateInfoDisplay() {
 		const zoomText = zoom > 1000 ? zoom.toExponential(2) : zoom.toFixed(1) + '×';
@@ -241,16 +246,23 @@
 	}
 
 	// Initialize responsive canvas
-	window.addEventListener('resize', resizeCanvas);
+	window.addEventListener('resize', function() {
+		resizeCanvas();
+		// Trigger re-render after resize
+		if (typeof startRender === 'function') {
+			startRender(1, 1);
+		}
+	});
 	document.getElementById('resetBtn').addEventListener('click', resetView);
 	
 	// Auto-hide info display
 	let infoTimeout;
 	function showInfo() {
-		document.getElementById('info').classList.remove('hidden');
+		const infoElement = document.getElementById('info');
+		infoElement.classList.remove('hidden');
 		clearTimeout(infoTimeout);
 		infoTimeout = setTimeout(() => {
-			document.getElementById('info').classList.add('hidden');
+			infoElement.classList.add('hidden');
 		}, 5000);
 	}
 
@@ -259,7 +271,11 @@
 	
 	// Initial setup
 	resizeCanvas();
-	showInfo();
+	
+	// Ensure info panel is visible initially
+	setTimeout(() => {
+		showInfo();
+	}, 100);
 	
 	// Trigger initial render
 	if (typeof startRender === 'function') {

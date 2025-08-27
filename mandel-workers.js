@@ -2,7 +2,33 @@
 const COMPUTE_WORKER_SCRIPT = "mandel-compute-wasm.js";
 console.log('Using WASM compute worker:', COMPUTE_WORKER_SCRIPT);
 
-var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;zoom=10;var startupTick=0;var startupAnim=1;const startZoom=300;const minZoom=100;const maxZoom=2000000000000000;const canvasWidth=600*2;const canvasHeight=600*2;const scaleFactor=2;const coarseWidth=canvasWidth/scaleFactor;const coarseHeight=canvasHeight/scaleFactor;var eventOccurred=0;var screenX=canvasWidth/2+5;var screenY=canvasHeight/2;const xnormMin=-8;const xnormMax=8;const ynormMin=-8;const ynormMax=8;var xnorm=0.0;var ynorm=0.0;var xmouse=0.0;var ymouse=0.0;var dLink;// Detect optimal worker count based on hardware capabilities
+// WASM unified rendering configuration - skip separate render step
+const USE_WASM_UNIFIED_RENDERING = true;
+console.log('WASM unified rendering:', USE_WASM_UNIFIED_RENDERING ? 'ENABLED (computation + rendering in one step)' : 'DISABLED (separate render step)');
+
+var firstPinchDistance=0;var mousePressed=0;var start=performance.now();var rotationFrameStart=performance.now();var eventTime=0;var posterTime=0;var zoomTime=0;var iterations=50;var startLine=0;var lastPointer="canvas";const maxIterations=1500;var autotuneIterations=true;var maxBlockSize=16;const startZoom=300;zoom=startZoom;var startupTick=0;var startupAnim=0;const minZoom=100;const maxZoom=2000000000000000;
+// Dynamic canvas dimensions based on window size
+var canvasWidth=window.innerWidth;
+var canvasHeight=window.innerHeight;
+const scaleFactor=1;
+var coarseWidth=Math.floor(canvasWidth/2);
+var coarseHeight=Math.floor(canvasHeight/2);
+var eventOccurred=0;
+// Set initial position to show classic Mandelbrot view centered at (-0.5, 0) in complex plane
+// For center_x = -0.5: (canvasWidth/2 - screenX) / zoom = -0.5
+// So screenX = canvasWidth/2 - (-0.5 * zoom) = canvasWidth/2 + (0.5 * zoom)
+var screenX=canvasWidth/2 + (0.5 * startZoom);
+var screenY=canvasHeight/2; // center_y = 0
+const xnormMin=-8;
+const xnormMax=8;
+const ynormMin=-8;
+const ynormMax=8;
+var xnorm=0.0;
+var ynorm=0.0;
+var xmouse=0.0;
+var ymouse=0.0;
+var dLink;
+// Detect optimal worker count based on hardware capabilities
 var workers = (function() {
     // Use hardware concurrency if available, with reasonable bounds
     if (navigator.hardwareConcurrency) {
@@ -14,9 +40,80 @@ var workers = (function() {
 
 var blockSize=new Uint8Array(workers);
 for(var i=0; i<workers; i++) { blockSize[i]=16; }
-var colours=new Uint32Array(256);var vga=new Uint32Array(256);const paletteCount=13;var currentPalette=-1;var currentRotation=0;var rotating=0;var renderCount=0;var travelling=0;var movingToSaved=0;var destX=0;var destY=0;var destZoom=0;var destIters=0;var computeWorker=new Array();var computeWorkerRunning=new Uint8Array(workers);var renderWorker=new Array();var renderWorkerRunning=new Uint8Array(workers);var needToRun=new Uint8Array(workers);var finished=new Uint8Array(workers);var timesTaken=new Array(20);var timesTakenSorted=new Array(20);var benchmarkTime=2;
-for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;const chunkHeight=canvasHeight/workers;var needRedraw=0;var needRecompute=1;var showAxes=0;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var smoothBox=document.getElementById("smooth");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});offScreen.width=canvasWidth;offScreen.height=canvasHeight;var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});coarse.width=coarseWidth;coarse.height=coarseHeight;var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();var mandel=new Array();var smoothMandel=new Array();var percentDone=new Array();for(i=0;i<workers;i++){computeWorkerRunning[i]=0;renderWorkerRunning[i]=0;offScreenSegment[i]=document.createElement('canvas');offScreenSegmentCtx[i]=offScreenSegment[i].getContext("2d",{alpha:false});offScreenSegment[i].width=canvasWidth;offScreenSegment[i].height=canvasHeight/workers;mSegment[i]=offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,canvasHeight/workers);mdSegment[i]=new Uint8ClampedArray(canvasWidth*canvasHeight/workers*4);mdSegment[i].set(mSegment[i].data);coarseSegment[i]=document.createElement('canvas');coarseSegmentCtx[i]=coarseSegment[i].getContext("2d",{alpha:false});coarseSegment[i].width=coarseWidth;coarseSegment[i].height=coarseHeight/workers;mCoarseSegment[i]=coarseSegmentCtx[i].getImageData(0,0,coarseWidth,coarseHeight/workers);mdCoarseSegment[i]=mCoarseSegment[i].data;mandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));smoothMandel[i]=new Uint8Array(canvasWidth*(canvasHeight/workers));}
-var zoomSlider;var oldMouseX=-1;var oldMouseX=-1;var worker=0;mc.addEventListener("touchstart",touchStart,false);mc.addEventListener("touchmove",touchMove,false);mc.addEventListener("touchend",touchEnd,false);window.addEventListener("resize",setViewport,false);function setViewport()
+var colours=new Uint32Array(256);var vga=new Uint32Array(256);const paletteCount=13;var currentPalette=-1;var currentRotation=0;var rotating=0;var renderCount=0;var travelling=0;var movingToSaved=0;var destX=0;var destY=0;var destZoom=0;var destIters=0;var computeWorker=new Array();var computeWorkerRunning=new Uint8Array(workers);var needToRun=new Uint8Array(workers);var finished=new Uint8Array(workers);var timesTaken=new Array(20);var timesTakenSorted=new Array(20);var benchmarkTime=2;
+// Legacy variables - kept for compatibility but no longer populated with WASM unified rendering
+var mandel=new Array();var smoothMandel=new Array();var percentDone=new Array();
+for(var i=0; i<workers; i++) { needToRun[i]=0; finished[i]=0; }var workersRunning=0;
+// Dynamic chunk height calculation
+var chunkHeight=Math.floor(canvasHeight/workers);
+var needRedraw=0;var needRecompute=1;var showAxes=0;var smooth=1;var mc=document.getElementById("mandelCanvas");var viewportTag=document.getElementById("viewport");var mctx=mc.getContext("2d",{alpha:false});var logText=document.getElementById("logText");var cycleText=document.getElementById("cycle");var workingText=document.getElementById("workingText");var zoomText=document.getElementById("zoomText");var iterSlider=document.getElementById("iterSlider");var mandelText=document.getElementById("mandelText");var itersInput=document.getElementById("itersInput");var xPosText=document.getElementById("xPosText");var yPosText=document.getElementById("yPosText");var paletteText=document.getElementById("currentPalette");var nextPalette=document.getElementById("nextPalette");var prevPalette=document.getElementById("prevPalette");var showAxesBox=document.getElementById("showAxes");var smoothBox=document.getElementById("smooth");var coordSourceText=document.getElementById("coordSource");var coordSource2Text=document.getElementById("coordSource2");var posterDialog=document.getElementById("posterDialog");var posterDialogBody=document.getElementById("posterDialogBody");var linkDialog=document.getElementById("linkDialog");var posterClose=document.getElementById("posterClose");var linkClose=document.getElementById("linkClose");var permalinkURL=document.getElementById("permalinkURL");var permalinkAnchor=document.getElementById("permalinkAnchor");var aboutBox=document.getElementById("aboutBox");var aboutBoxContent=document.getElementById("aboutBoxContent");var aboutClose=document.getElementById("aboutClose");var showInstructionsBtn=document.getElementById("showInstructionsBtn");var showMathematicsBtn=document.getElementById("showMathematicsBtn");var showFractalsBtn=document.getElementById("showFractalsBtn");var jumpSelect=document.getElementById("jumpTo");var ultraWidth=4000*2;var ultraHeight=3000*2;var ultraCanvas;var ultraCanvasCtx;var ultraScaledCanvas;var ultraScaledCanvasCtx;var ultraSegment;var offScreen=document.createElement('canvas');var offScreenCtx=offScreen.getContext("2d",{alpha:false});var coarse=document.createElement('canvas');var coarseCtx=coarse.getContext("2d",{alpha:false});var offScreenSegment=new Array();var offScreenSegmentCtx=new Array();var mSegment=new Array();var mdSegment=new Array();var coarseSegment=new Array();var coarseSegmentCtx=new Array();var mCoarseSegment=new Array();var mdCoarseSegment=new Array();
+// Initialize canvas-dependent objects after dimensions are set
+// This will be called by updateCanvasDimensions() during setup
+// Function to update canvas dimensions and reinitialize canvas-dependent objects
+function updateCanvasDimensions() {
+    // Update dimensions
+    canvasWidth = window.innerWidth;
+    canvasHeight = window.innerHeight;
+    coarseWidth = Math.floor(canvasWidth/2);
+    coarseHeight = Math.floor(canvasHeight/2);
+    chunkHeight = Math.floor(canvasHeight/workers);
+    
+    // Update offScreen and coarse canvases
+    offScreen.width = canvasWidth;
+    offScreen.height = canvasHeight;
+    coarse.width = coarseWidth;
+    coarse.height = coarseHeight;
+    
+    // Initialize or reinitialize worker segments with new dimensions
+    for(var i=0; i<workers; i++) {
+        computeWorkerRunning[i]=0;
+        
+        // Create or update segment canvases
+        if(!offScreenSegment[i]) {
+            offScreenSegment[i] = document.createElement('canvas');
+            offScreenSegmentCtx[i] = offScreenSegment[i].getContext("2d",{alpha:false});
+        }
+        offScreenSegment[i].width = canvasWidth;
+        offScreenSegment[i].height = chunkHeight;
+        mSegment[i] = offScreenSegmentCtx[i].getImageData(0,0,canvasWidth,chunkHeight);
+        mdSegment[i] = new Uint8ClampedArray(canvasWidth*chunkHeight*4);
+        mdSegment[i].set(mSegment[i].data);
+        
+        if(!coarseSegment[i]) {
+            coarseSegment[i] = document.createElement('canvas');
+            coarseSegmentCtx[i] = coarseSegment[i].getContext("2d",{alpha:false});
+        }
+        coarseSegment[i].width = coarseWidth;
+        coarseSegment[i].height = Math.floor(coarseHeight/workers);
+        mCoarseSegment[i] = coarseSegmentCtx[i].getImageData(0,0,coarseWidth,Math.floor(coarseHeight/workers));
+        mdCoarseSegment[i] = mCoarseSegment[i].data;
+        
+        // Update legacy arrays (though not used in WASM rendering)
+        mandel[i] = new Uint8Array(canvasWidth*chunkHeight);
+        smoothMandel[i] = new Uint8Array(canvasWidth*chunkHeight);
+        percentDone[i] = 0;
+        
+        // Initialize alpha channel for new segments
+        for(let y=0; y<chunkHeight; y++){
+            for(let x=0; x<canvasWidth; x++){
+                let pixelPos=(x+y*canvasWidth)*4;
+                if(pixelPos + 3 < mdSegment[i].length) {
+                    mdSegment[i][pixelPos+3]=255;
+                }
+            }
+        }
+        for(let y=0; y<Math.floor(coarseHeight/workers); y++){
+            for(let x=0; x<coarseWidth; x++){
+                let pixelPos=(x+y*coarseWidth)*4;
+                if(pixelPos + 3 < mdCoarseSegment[i].length) {
+                    mdCoarseSegment[i][pixelPos+3]=255;
+                }
+            }
+        }
+    }
+}
+
+var zoomSlider;var oldMouseX=-1;var oldMouseX=-1;var worker=0;mc.addEventListener("touchstart",touchStart,false);mc.addEventListener("touchmove",touchMove,false);mc.addEventListener("touchend",touchEnd,false);window.addEventListener("resize",function(){setViewport();updateCanvasDimensions();startRender(1,1);},false);function setViewport()
 {var ww=window.screen.width;var cw=canvasWidth/2+50;if(ww<cw){var ratio=ww/cw;viewportTag.setAttribute("content","width="+ww+",initial-scale="+ratio);document.body.style.fontSize=Math.floor(70/ratio)+"%";var checkBoxes=document.querySelectorAll("input[type=checkbox]");var checkBoxCount=checkBoxes.length;for(var i=0;i<checkBoxCount;i++)
 checkBoxes[i].style.transform="scale("+0.7/ratio+")";}
 else{viewportTag.setAttribute("content","width="+ww+",initial-scale=1.0");}}
@@ -190,63 +287,68 @@ itersToPrint="n/a";mandelText.textContent=itersToPrint;}
 var onComputeEnded=function(e)
 {if(!e.data.finished){if(blockSize[e.data.workerID]==1){percentDone[e.data.workerID]=Math.round(e.data.lineCount/(canvasHeight/workers)*100);var totalProgress=0;for(var j=0;j<workers;j++){totalProgress+=percentDone[j];}progress=Math.floor(totalProgress/workers);workingText.innerHTML="<i>"+progress+"%</i>";}
 return 1;}
-var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;mandel[workerID]=new Uint8Array(e.data.mandel);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);while(renderWorkerRunning[workerID]!=0){console.log("Waiting for worker to end");}
-if(!renderWorker[workerID]){renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;}
-renderWorkerRunning[workerID]=1;if(blockSize[workerID]==1)
-renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[workerID].buffer},[mandel[workerID].buffer],[smoothMandel[workerID].buffer],[mdSegment[workerID].buffer]);else
-renderWorker[workerID].postMessage({colours:colours,mandel:mandel[workerID].buffer,canvasBuffer:mdCoarseSegment[workerID].buffer,workerID:workerID,blockSize:blockSize[workerID],arrayWidth:coarseWidth,segmentHeight:chunkHeight/scaleFactor,smooth:smooth,smoothMandel:smoothMandel[workerID]},[mandel[workerID].buffer],[mdCoarseSegment[workerID].buffer],[smoothMandel[workerID].buffer]);}
-var onRenderEnded=function(e)
-{var workerID=e.data.workerID;mandel[workerID]=new Uint8Array(e.data.mandelBuffer);smoothMandel[workerID]=new Uint8Array(e.data.smoothMandel);
-// Handle ImageBitmap response when OffscreenCanvas is used
-if(e.data.useOffscreenCanvas && e.data.imageBitmap){
-    // Handle both fine and coarse rendering correctly
-    if(e.data.blockSize==1){
-        // Fine rendering - draw to offScreen canvas
-        var lstartLine=Math.floor(workerID*chunkHeight);
-        offScreenCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
-        finished[workerID]=1;
-    } else {
-        // Coarse rendering - draw to coarse canvas
-        var lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);
-        coarseCtx.drawImage(e.data.imageBitmap, 0, lstartLine);
-        mctx.drawImage(coarse,0,0);
-    }
+var workerID=e.data.workerID;computeWorkerRunning[workerID]=0;
+
+// Always use unified WASM rendering - RGBA data directly from compute worker
+var rgbaData=new Uint8ClampedArray(e.data.mandel);
+
+if(blockSize[workerID]==1){
+    // Fine rendering - put RGBA data directly to canvas
+    mSegment[workerID].data.set(rgbaData);
+    finished[workerID]=1;
+    var lstartLine=Math.floor(workerID*chunkHeight);
+    offScreenSegmentCtx[workerID].putImageData(mSegment[workerID],0,0);
+    offScreenCtx.drawImage(offScreenSegment[workerID],0,lstartLine);
 } else {
-    // Fallback to original pixel array approach
-    if(e.data.blockSize==1)
-    mdSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);else
-    mdCoarseSegment[workerID]=new Uint8ClampedArray(e.data.pixelsBuffer);
-    var lstartLine;if(e.data.blockSize==1){finished[workerID]=1;mSegment[workerID].data.set(mdSegment[workerID]);lstartLine=Math.floor(workerID*chunkHeight);offScreenCtx.putImageData(mSegment[workerID],0,lstartLine);}else{mCoarseSegment[workerID].data.set(mdCoarseSegment[workerID]);lstartLine=Math.floor(workerID*chunkHeight/scaleFactor);coarseCtx.putImageData(mCoarseSegment[workerID],0,lstartLine);mctx.drawImage(coarse,0,0);}
+    // Coarse rendering - put RGBA data to coarse canvas  
+    mCoarseSegment[workerID].data.set(rgbaData);
+    finished[workerID]=1;
+    var lstartLine=Math.floor(workerID*chunkHeight/2);
+    coarseSegmentCtx[workerID].putImageData(mCoarseSegment[workerID],0,0);
+    coarseCtx.drawImage(coarseSegment[workerID],0,lstartLine);
+    mctx.drawImage(coarse,0,0);
 }
-renderWorkerRunning[workerID]=0;workersRunning--;if(renderCount++>=20){renderCount=0;renderWorker[workerID].terminate();renderWorker[workerID]=null;renderWorker[workerID]=new Worker("mandel-render.js");renderWorker[workerID].onmessage=onRenderEnded;var zoomTmp=Math.floor(zoom);delete zoom;window.zoom=zoomTmp;}
-if(workersRunning==0){var allFinished=true;for(var i=0;i<workers;i++){if(!finished[i]){allFinished=false;break;}}if((!eventOccurred)&&(allFinished)){needRedraw=0;mctx.drawImage(offScreen,0,0,canvasWidth/scaleFactor,canvasHeight/scaleFactor);if(!rotating){workingText.style.visibility="hidden";mc.style.borderColor="black";mc.style.outline="5px solid #FFFFFF";if(posterTime!=0){diff=Math.floor((performance.now()-posterTime)/10)/100;posterTime=0;logText.innerHTML="Poster rendered in "+diff+" s";}
-else{diff=Math.floor((performance.now()-start)/10)/100;logText.innerHTML="Rendered in "+diff+" s";if(typeof showInfoAfterRender==='function'){showInfoAfterRender(diff*1000);}}
-updateCoords(canvasWidth/2,canvasHeight/2,"centre");}
-}};
-if(showAxes)
-drawAxes();if(startupAnim){if(startupTick<50){startupTick++;zoom=Math.ceil(Math.sin((startupTick/70)*Math.PI)*(startZoom+80));zoomText.textContent=Math.floor(zoom);if(startupTick>29){if(startupTick>30)
-timesTaken[startupTick-31]=performance.now()-timer;timer=performance.now();}}
-else{timesTakenSorted=timesTaken.sort(function(a,b){return a-b});benchmarkTime=Math.min(Math.max((timesTakenSorted[5]+timesTakenSorted[6]+timesTakenSorted[7])/3,2),20);if(benchmarkTime<7)
-maxBlockSize=8;else
-maxBlockSize=16;for(var i=0;i<workers;i++){blockSize[i]=maxBlockSize;}startupAnim=0;zoomText.textContent=Math.floor(zoom);if(iterations!=iterSlider.value){iterations=Math.floor(iterSlider.value);itersInput.value=iterations;}
-xnorm=(canvasWidth/2*1.0-screenX)/zoom;ynorm=(canvasHeight/2*1.0-screenY)/zoom;if(movingToSaved){travelling=1;travelDirX=Math.sign(destX-xnorm);travelDirY=Math.sign(destY-ynorm);travelDirZoom=Math.sign(destZoom-zoom);}}}
-else if(travelling>0){updateCoords(canvasWidth/2,canvasHeight/2,"centre");zoomText.textContent=Math.floor(zoom);if(travelling==2){ldestX=-1.342281879194631;ldestY=0.0;ldestZoom=300;if((zoom>Math.floor(ldestZoom))&&((!pointOnScreen(destX,destY))||(zoom>destZoom))){zoom+=Math.ceil((ldestZoom-zoom)/10*(benchmarkTime/4+2));if(Math.abs(zoom-ldestZoom)<5)
-zoom=Math.floor(ldestZoom);screenX=Math.round(-xnorm*zoom+canvasWidth/2);screenY=Math.round(-ynorm*zoom+canvasHeight/2);}
-else{travelling=1;travelDirX=Math.sign(destX-xnorm);travelDirY=Math.sign(destY-ynorm);travelDirZoom=Math.sign(destZoom-zoom);}}
-else{ldestX=destX;ldestY=destY;ldestZoom=destZoom;if((xnorm!=ldestX)||(ynorm!=ldestY)||(zoom!=ldestZoom)||(iterations!=destIters)){if(iterations<destIters){iterations+=benchmarkTime;if(iterations>destIters)
-iterations=destIters;iterSlider.value=iterations;itersInput.value=iterations;}
-if(iterations>destIters){iterations-=benchmarkTime*2;if(iterations<destIters)
-iterations=destIters;iterSlider.value=iterations;itersInput.value=iterations;}
-if((Math.abs((xnorm-ldestX)*zoom)<1)||(Math.sign(ldestX-xnorm)!=travelDirX))
-xnorm=ldestX;else
-xnorm+=(ldestX-xnorm)/Math.log(zoom)/4*benchmarkTime*(movingToSaved*2+1);if((Math.abs((ynorm-ldestY)*zoom)<1)||(Math.sign(ldestY-ynorm)!=travelDirY))
-ynorm=ldestY;else
-ynorm+=(ldestY-ynorm)/Math.log(zoom)/4*benchmarkTime*(movingToSaved*2+1);if((Math.abs((zoom-ldestZoom)/ldestZoom*100)<3)||(Math.sign(ldestZoom-zoom)!=travelDirZoom))
-zoom=Math.floor(ldestZoom);else
-zoom+=Math.max(Math.ceil(Math.log(ldestZoom-zoom)*(zoom/2000)*benchmarkTime*(movingToSaved*4+1)),1);screenX=Math.round(-xnorm*zoom+canvasWidth/2);screenY=Math.round(-ynorm*zoom+canvasHeight/2);}
-else{travelling=0;movingToSaved=0;start=performance.now();zoom=Math.floor(zoom);}}}
-else if((blockSize[workerID]>=2)&&(!eventOccurred)&&(!mousePressed)){if(performance.now()>zoomTime+200){needToRun[workerID]=1;blockSize[workerID]/=2;}}else
-needToRun[workerID]=0;};function wheelMoved(event)
+
+// No render step needed - compute worker provided RGBA directly
+workersRunning--;
+
+// Check if all workers are done (moved from onRenderEnded)
+if(workersRunning==0){
+    var allFinished=true;
+    for(var i=0;i<workers;i++){
+        if(!finished[i]){
+            allFinished=false;
+            break;
+        }
+    }
+    if((!eventOccurred)&&(allFinished)){
+        needRedraw=0;
+        // Only draw offScreen canvas in fine mode (blockSize==1), coarse mode already drew to main canvas
+        if(blockSize[0]==1){
+            mctx.drawImage(offScreen,0,0);
+        }
+        if(!rotating){
+            workingText.style.visibility="hidden";
+            mc.style.borderColor="black";
+            mc.style.outline="5px solid #FFFFFF";
+            if(posterTime!=0){
+                diff=Math.floor((performance.now()-posterTime)/10)/100;
+                posterTime=0;
+                logText.innerHTML="Poster rendered in "+diff+" s";
+            } else {
+                diff=Math.floor((performance.now()-start)/10)/100;
+                logText.innerHTML="Rendered in "+diff+" s";
+                if(typeof showInfoAfterRender==='function'){
+                    showInfoAfterRender(diff*1000);
+                }
+            }
+            updateCoords(canvasWidth/2,canvasHeight/2,"centre");
+        }
+    }
+}
+};
+// Legacy onRenderEnded removed - unified WASM rendering handles everything in onComputeEnded
+function wheelMoved(event)
 {event.preventDefault();if(posterTime!=0)
 return 1;if(typeof hideInfo==='function'){hideInfo();}zoomTime=performance.now();eventTime=performance.now();var rect=mc.getBoundingClientRect();var mx=(event.clientX-rect.left)/(rect.width)*rect.width*scaleFactor-4;var my=(event.clientY-rect.top)/(rect.height)*rect.height*scaleFactor-4;if((mx<=0)||(mx>canvasWidth)||(my<=0)||(my>canvasHeight))
 return 1;var xnorm=(mx*1.0-screenX)/zoom;var ynorm=(my*1.0-screenY)/zoom;if(((zoom==maxZoom)&&(event.deltaY<0))||((zoom==minZoom)&&(event.deltaY>0)))
@@ -288,9 +390,7 @@ function touchEnd(event)
 function updateCoords(x,y,source)
 {var xnorm=Math.floor((x-screenX)/zoom*1000000000)/1000000000;var ynorm=Math.floor((y-screenY)/zoom*1000000000)/1000000000;xmouse=xnorm;ymouse=ynorm;xPosText.value=''+xnorm;yPosText.value=''+-ynorm;coordSourceText.textContent=" "+source;coordSource2Text.textContent=" "+source;oneShotWorker.postMessage({oneShot:1,x:x,y:y,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,smooth:0});}
 function setup()
-{setViewport();showAxesBox.checked=false;smoothBox.checked=true;incrPalette();needRedraw=0;loadState();zoomText.textContent=Math.floor(zoom);oneShotWorker=new Worker(COMPUTE_WORKER_SCRIPT);oneShotWorker.onmessage=onOneShotComputeEnded;for(let i=0;i<workers;i++){for(let y=0;y<canvasHeight/workers;y++){for(let x=0;x<canvasWidth;x++){let pixelPos=(x+y*canvasWidth)*4;mdSegment[i][pixelPos+3]=255;}}
-for(let y=0;y<coarseHeight/workers;y++){for(let x=0;x<coarseWidth;x++){let pixelPos=(x+y*coarseWidth)*4;mdCoarseSegment[i][pixelPos+3]=255;}}}
-eventTime=performance.now();needRedraw=1;toggleSmooth();startRender(1,1);}
+{setViewport();updateCanvasDimensions();showAxesBox.checked=false;smoothBox.checked=true;incrPalette();needRedraw=0;loadState();zoomText.textContent=Math.floor(zoom);oneShotWorker=new Worker(COMPUTE_WORKER_SCRIPT);oneShotWorker.onmessage=onOneShotComputeEnded;eventTime=performance.now();needRedraw=1;toggleSmooth();startRender(1,1);}
 function startRender(lneedRecompute,blocky)
 {workingText.innerHTML="";workingText.style.visibility="visible";if(rotating)
 logText.innerHTML="<i>Cycling colours...</i>";else
@@ -304,15 +404,13 @@ function drawMandel()
 rotationFrameStart=performance.now();if((!startupAnim)&&(!autotuneIterations)&&(iterations!=iterSlider.value)){iterations=Math.floor(iterSlider.value);startRender(1,1);needRedraw=1;}
 for(i=0;i<workers;i++)
 if((blockSize[i]>1)&&(performance.now()>zoomTime+500))
-needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((needToRun[i]==1)&&(!eventOccurred)){if(renderWorkerRunning[i]){continue;}
-if(computeWorkerRunning[i]){continue;}
-if(needRecompute){if(!computeWorker[i]){computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onComputeEnded;}
-workersRunning++;computeWorkerRunning[i]=1;if(blockSize[i]==1)
-computeWorker[i].postMessage({mandelBuffer:mandel[i].buffer,workerID:i,startLine:startLine,blockSize:blockSize[i],canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer]);else
-computeWorker[i].postMessage({mandelBuffer:mandel[i].buffer,workerID:i,startLine:startLine/scaleFactor,blockSize:blockSize[i],canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/scaleFactor,screenY:screenY/scaleFactor,zoom:zoom/scaleFactor,iterations:iterations,oneShot:0,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer]);}
-else{workersRunning++;if(!renderWorker[i]){renderWorker[i]=new Worker("mandel-render.js");renderWorker[i].onmessage=onRenderEnded;}
-renderWorkerRunning[i]=1;renderWorker[i].postMessage({colours:colours,mandel:mandel[i].buffer,canvasBuffer:mdSegment[i].buffer,workerID:i,blockSize:blockSize[i],arrayWidth:canvasWidth,segmentHeight:chunkHeight,smooth:smooth,smoothMandel:smoothMandel[i].buffer},[mandel[i].buffer],[smoothMandel[i].buffer],[mdSegment[i].buffer]);}}}}
+needRedraw=1;if(needRedraw){for(i=0;i<workers;i++){startLine=chunkHeight*i;if((needToRun[i]==1)&&(!eventOccurred)){if(computeWorkerRunning[i]){continue;}
+// Always use WASM unified rendering - no separate render step needed
+if(!computeWorker[i]){computeWorker[i]=new Worker(COMPUTE_WORKER_SCRIPT);computeWorker[i].onmessage=onComputeEnded;}
+workersRunning++;computeWorkerRunning[i]=1;console.log(`Starting worker ${i} with zoom=${zoom}, screenX=${screenX}, screenY=${screenY}`);if(blockSize[i]==1)
+computeWorker[i].postMessage({workerID:i,startLine:startLine,canvasWidth:canvasWidth,canvasHeight:canvasHeight,segmentHeight:chunkHeight,screenX:screenX,screenY:screenY,zoom:zoom,iterations:iterations,oneShot:0});else
+computeWorker[i].postMessage({workerID:i,startLine:startLine/2,canvasWidth:coarseWidth,canvasHeight:coarseHeight,segmentHeight:chunkHeight/2,screenX:screenX/2,screenY:screenY/2,zoom:zoom/2,iterations:iterations,oneShot:0});}}}
 if((workersRunning==0)&&(rotating==1))
-rotatePalette(-1);else
+rotatePalette(-1);else if((workersRunning>0||rotating==1)&&needRedraw==1)
 requestAnimationFrame(drawMandel);}
 setup();drawMandel();
