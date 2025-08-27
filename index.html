@@ -251,7 +251,7 @@
 			destIters = 200;
 		}
 		travelling = 2;
-		startRender(1, 1);
+		startRender(1, 0);
 	}
 
 	// Fullscreen functionality
@@ -291,7 +291,7 @@
 		setTimeout(() => {
 			resizeCanvas();
 			if (typeof startRender === 'function') {
-				startRender(1, 1);
+				startRender(1, 0);
 			}
 		}, 100);
 	});
@@ -314,7 +314,7 @@
 		resizeCanvas();
 		// Trigger re-render after resize
 		if (typeof startRender === 'function') {
-			startRender(1, 1);
+			startRender(1, 0);
 		}
 	});
 	document.getElementById('resetBtn').addEventListener('click', resetView);
@@ -343,9 +343,9 @@
 		showInfo();
 	}, 100);
 	
-	// Trigger initial render
+	// Trigger initial render with fine detail (not coarse)
 	if (typeof startRender === 'function') {
-		startRender(1, 1);
+		startRender(1, 0);
 	}
 
 	// Override the original updateCoords to update our info display
