@@ -348,7 +348,50 @@ if(workersRunning==0){
         if(blockSize==1){
             mctx.drawImage(offScreen,0,0);
         }
-        if(!rotating){
+        
+        // Handle travelling animation
+        if(travelling > 0) {
+            // Calculate destination screen coordinates from fractal coordinates
+            var destScreenX = Math.round(-destX * destZoom + canvasWidth/2);
+            var destScreenY = Math.round(-destY * destZoom + canvasHeight/2);
+            
+            // Gradually move towards destination
+            var stepFactor = 0.3; // Animation speed
+            var newScreenX = Math.round(screenX + (destScreenX - screenX) * stepFactor);
+            var newScreenY = Math.round(screenY + (destScreenY - screenY) * stepFactor);
+            var newZoom = Math.round(zoom + (destZoom - zoom) * stepFactor);
+            var newIterations = Math.round(iterations + (destIters - iterations) * stepFactor);
+            
+            // Check if we're close enough to destination or time limit reached
+            var screenDiff = Math.abs(newScreenX - destScreenX) + Math.abs(newScreenY - destScreenY);
+            var zoomDiff = Math.abs(newZoom - destZoom);
+            
+            if(screenDiff < 10 && zoomDiff < 10 || travelling <= 1) {
+                // Animation complete - snap to exact destination
+                screenX = destScreenX;
+                screenY = destScreenY;
+                zoom = destZoom;
+                iterations = destIters;
+                travelling = 0;
+                // Final render with exact destination values
+                startRender(1, 0);
+                return; // Prevent further processing
+            } else {
+                // Continue animation
+                screenX = newScreenX;
+                screenY = newScreenY;
+                zoom = newZoom;
+                iterations = newIterations;
+                travelling--;
+                // Continue animation with coarse rendering for smooth animation
+                enableCoarseMode();
+                startRender(1, 0);
+                scheduleFineModeSwitch();
+                return; // Prevent further processing
+            }
+        }
+        
+        if(!rotating && travelling == 0){
             workingText.style.visibility="hidden";
             mc.style.borderColor="black";
             mc.style.outline="5px solid #FFFFFF";
